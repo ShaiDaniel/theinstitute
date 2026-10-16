@@ -2,8 +2,9 @@
 //   nicks/{nick}               uid that owns the nick (lowercase), so nicks are unique
 //   users/{uid}/nick           the nick as typed
 //   presence/{uid}             {nick, at, away?} while connected (removed on disconnect)
-//   channels/{chan}            {createdBy, createdAt, topic, ops, voice, bans, modes}
-//   occupants/{chan}/{uid}     {nick, at} while in the channel (removed on disconnect)
+//   channels/{chan}            {createdBy, createdAt, topic, ops, voice, bans, modes}; never removed
+//   occupants/{chan}/{uid}     {nick, at}: in the channel until /part or a kick, online or not
+//                              (like a bouncer; presence says who is online right now)
 //   messages/{chan}/{id}       {uid, nick, type, text, at}, kept as the channel's log
 //   pm/{uidA_uidB}/{id}        private messages between two people
 //   pmIndex/{uid}/{otherUid}   {at}: who has written to whom, so new conversations open
@@ -173,6 +174,15 @@ const occupantRef = (chan: string, uid: string): DatabaseReference => ref(rtdb, 
 
 export class Banned extends Error {}
 
+/** The channels the member is in (they stay in them until they /part, even when offline). */
+export async function myChannels(uid: string): Promise<string[]> {
+  const all = await allOccupants();
+  return Object.entries(all)
+    .filter(([, people]) => uid in people)
+    .sort(([, a], [, b]) => ((a as Record<string, { at?: number }>)[uid]?.at ?? 0) - ((b as Record<string, { at?: number }>)[uid]?.at ?? 0))
+    .map(([chan]) => chan);
+}
+
 /** Joins a channel, creating it (with the member as op) if nobody has yet. */
 export async function join(uid: string, nick: string, chan: string) {
   const exists = (await get(ref(rtdb, `channels/${chan}/createdBy`))).exists();
@@ -180,7 +190,6 @@ export async function join(uid: string, nick: string, chan: string) {
     await update(ref(rtdb), { [`channels/${chan}/createdBy`]: uid, [`channels/${chan}/createdAt`]: now(), [`channels/${chan}/ops/${uid}`]: true });
   }
   try {
-    await onDisconnect(occupantRef(chan, uid)).remove();
     await set(occupantRef(chan, uid), { nick, at: now() });
   } catch (e) {
     if ((await get(ref(rtdb, `channels/${chan}/bans/${uid}`))).exists()) throw new Banned();
@@ -191,7 +200,6 @@ export async function join(uid: string, nick: string, chan: string) {
 
 export async function part(uid: string, nick: string, chan: string, reason = '') {
   await say(uid, nick, chan, reason, 'part').catch(() => {});
-  await onDisconnect(occupantRef(chan, uid)).cancel();
   await remove(occupantRef(chan, uid));
 }
 
@@ -223,7 +231,7 @@ export async function kick(uid: string, nick: string, chan: string, target: { ui
 }
 
 /** Everyone currently in any channel, by channel. */
-export async function allOccupants(): Promise<Record<string, Record<string, { nick: string }>>> {
+export async function allOccupants(): Promise<Record<string, Record<string, { nick: string; at?: number }>>> {
   return (await get(ref(rtdb, 'occupants'))).val() ?? {};
 }
 

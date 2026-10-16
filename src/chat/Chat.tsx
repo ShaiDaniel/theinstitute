@@ -1,7 +1,8 @@
 // The chat: an imitation of mIRC. A switchbar of windows (status, channels, private messages),
 // the conversation, the nick list (@ ops, + voice, away greyed) and a command line that takes
 // /join, /part, /me, /nick, /topic, /away, /whois, /msg, /query, /op, /deop, /voice, /devoice,
-// /kick, /ban, /unban, /mode, /list, /clear, /close and /help. Data and rules: irc.ts.
+// /kick, /ban, /unban, /mode, /list, /clear, /close and /help, plus a toolbar of macro buttons and a
+// help panel (Macros.tsx, Help.tsx). Data and rules: irc.ts.
 import { get, limitToLast, onChildAdded, onValue, query, ref } from 'firebase/database';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSession } from '../auth';
@@ -9,6 +10,9 @@ import { signIn } from '../firebase';
 import { useI18n } from '../i18n';
 import { hrefOf } from '../route';
 import { BOLD, COLOR, COLOR_NAMES, Formatted, ITALIC, PALETTE, RESET, UNDERLINE } from './format';
+import { ContextMenu, type MenuItem, type MenuState } from './ContextMenu';
+import { COMMANDS, HelpPanel } from './Help';
+import { fillsInput, loadMacros, MacroBar, saveMacros, type Macro } from './Macros';
 import {
   Banned,
   chanName,
@@ -16,6 +20,7 @@ import {
   goOnline,
   join,
   kick,
+  myChannels,
   myNick,
   nickProblem,
   NickTaken,
@@ -45,11 +50,20 @@ const keyOf = (w: Win) => (w.kind === 'status' ? 'status' : w.kind === 'channel'
 const titleOf = (w: Win) => (w.kind === 'status' ? 'Status' : w.kind === 'channel' ? `#${w.chan}` : w.nick);
 
 /** A line shown in a window: a stored message, or something only this member sees. */
+/** Who a right-clicked nick is, and (in a channel) their standing there. */
+interface NickTarget {
+  uid: string;
+  nick: string;
+  channel?: { iAmOp: boolean; op: boolean; voice: boolean };
+}
+type OnNickMenu = (e: React.MouseEvent, target: NickTarget) => void;
+
 interface Line {
   id: string;
   at: number;
   kind: 'msg' | 'action' | 'event' | 'local' | 'error';
   nick?: string;
+  uid?: string;
   text: string;
   /** The event's colour class, mIRC style. */
   tone?: 'join' | 'part' | 'topic' | 'kick' | 'mode' | 'nick' | 'notice';
@@ -61,7 +75,7 @@ const time = (at: number) => {
 };
 
 function toLine(m: Message, where: string): Line {
-  const base = { id: m.id, at: m.at, nick: m.nick };
+  const base = { id: m.id, at: m.at, nick: m.nick, uid: m.uid };
   switch (m.type) {
     case 'msg':
       return { ...base, kind: 'msg', text: m.text };
@@ -86,21 +100,6 @@ function toLine(m: Message, where: string): Line {
   }
 }
 
-const HELP = [
-  '/join #channel — join or create a channel',
-  '/part [reason] — leave this channel',
-  '/me does something — an action',
-  '/nick NewNick — change your nick',
-  '/topic [text] — show or set the topic',
-  '/away [message] — set away; /away alone to come back',
-  '/whois nick — who is it, where are they',
-  '/msg nick text — private message; /query nick opens a window',
-  '/op /deop /voice /devoice nick — ops only',
-  '/kick nick [reason], /ban nick, /unban nick — ops only',
-  '/mode +m|-m|+t|-t — moderated; only ops set the topic',
-  '/list — channels; /clear — clear this window; /close — close this window',
-  'Ctrl+K colour, Ctrl+B bold, Ctrl+U underline, Ctrl+I italic, Ctrl+O plain',
-];
 
 // --- Entry: sign in, then a nick -----------------------------------------------------------
 
@@ -185,15 +184,6 @@ function NickPicker({ uid, name, onDone }: { uid: string; name: string; onDone: 
 
 // --- The client ----------------------------------------------------------------------------
 
-const savedChannels = (uid: string): string[] => {
-  try {
-    const x = JSON.parse(localStorage.getItem(`chat:${uid}:channels`) ?? 'null');
-    if (Array.isArray(x) && x.every((c) => typeof c === 'string')) return x;
-  } catch {
-    // Not remembered.
-  }
-  return [DEFAULT_CHANNEL];
-};
 
 function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
   const { t } = useI18n();
@@ -208,10 +198,22 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
   nickRef.current = nick;
   const startedAt = useRef(Date.now());
   const topics = useRef<Record<string, string>>({});
+  const leaving = useRef(new Set<string>());
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [macros, setMacrosState] = useState<Macro[]>(() => loadMacros(uid));
+  const [fill, setFill] = useState<{ text: string; n: number } | null>(null);
+  const setMacros = (m: Macro[]) => {
+    setMacrosState(m);
+    saveMacros(uid, m);
+  };
   const clearedAt = useRef<Record<string, number>>({});
 
   const channels = windows.filter((w): w is Extract<Win, { kind: 'channel' }> => w.kind === 'channel').map((w) => w.chan);
   const activeWin = windows.find((w) => keyOf(w) === active) ?? windows[0];
+  // Commands read these through refs, so the lines of a macro each see the result of the last one.
+  const live = useRef({ activeWin, channels });
+  live.current = { activeWin, channels };
 
   const echo = useCallback((key: string, text: string, kind: Line['kind'] = 'local') => {
     setLocal((cur) => ({ ...cur, [key]: [...(cur[key] ?? []), { id: `local-${Date.now()}-${Math.random()}`, at: Date.now(), kind, text }] }));
@@ -231,37 +233,32 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
   useEffect(() => goOnline(uid, nick), [uid]);
   useEffect(() => onValue(ref(rtdb, 'presence'), (s) => setPresence(s.val() ?? {})), []);
 
-  // Rejoin the channels from last time (once, even where React runs effects twice in development).
+  // Reopen the member's channels: they stay in them until they /part, even with the site closed
+  // (once, even where React runs effects twice in development). First visit: #institute.
   const started = useRef(false);
-  const restored = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    echo('status', `*** Welcome to The Institute's chat, ${nick}. Type /help for commands.`);
+    echo('status', `*** Welcome to InstituteIRC, ${nick}. Type /help for commands.`);
     echo('status', `*** ${t('chatNotEncrypted')}`);
     (async () => {
-      const saved = savedChannels(uid);
-      for (const chan of saved) {
+      let mine: string[] = [];
+      try {
+        mine = await myChannels(uid);
+      } catch {
+        // Fall back to the default channel below.
+      }
+      if (mine.length === 0) {
         try {
-          await join(uid, nickRef.current, chan);
-          openWindow({ kind: 'channel', chan }, chan === saved[0]);
+          await join(uid, nickRef.current, DEFAULT_CHANNEL);
+          mine = [DEFAULT_CHANNEL];
         } catch (e) {
-          echo('status', `*** Cannot join #${chan}${e instanceof Banned ? ' (banned)' : ''}`, 'error');
+          echo('status', `*** Cannot join #${DEFAULT_CHANNEL}${e instanceof Banned ? ' (banned)' : ''}`, 'error');
         }
       }
-      restored.current = true;
+      mine.forEach((chan, i) => openWindow({ kind: 'channel', chan }, i === 0));
     })();
   }, []);
-
-  // Remember joined channels for next time (not before last time's have been rejoined).
-  useEffect(() => {
-    if (!restored.current) return;
-    try {
-      localStorage.setItem(`chat:${uid}:channels`, JSON.stringify(channels));
-    } catch {
-      // Not remembered.
-    }
-  }, [channels.join(',')]);
 
   // New private conversations open their own window.
   useEffect(
@@ -280,6 +277,8 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
   useEffect(() => setUnread((u) => ({ ...u, [active]: 0 })), [active]);
 
   const run = async (input: string) => {
+    const { activeWin, channels } = live.current;
+    const nick = nickRef.current;
     const where = keyOf(activeWin);
     const chan = activeWin.kind === 'channel' ? activeWin.chan : null;
     const needChan = () => {
@@ -303,25 +302,32 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
     const rest = args.join(' ').trim();
     switch (cmd.toLowerCase()) {
       case 'help':
-        HELP.forEach((h) => echo(where, h));
+        COMMANDS.forEach((c) => echo(where, `${c.syntax} — ${t(c.key)}`));
+        echo(where, t('help_more'));
         return;
       case 'join':
       case 'j': {
         const c = chanName(args[0] ?? '');
         if (!c) throw new Error('Usage: /join #channel (letters, digits, - and _)');
-        if (channels.includes(c)) return setActive(`#${c}`);
+        if (channels.includes(c)) {
+          live.current = { ...live.current, activeWin: { kind: 'channel', chan: c } };
+          return setActive(`#${c}`);
+        }
         try {
           await join(uid, nick, c);
         } catch (e) {
           throw new Error(e instanceof Banned ? `Cannot join #${c} (you are banned)` : `Cannot join #${c}`);
         }
         openWindow({ kind: 'channel', chan: c });
+        // The next line of a macro acts in the new window, before the page has re-rendered.
+        live.current = { activeWin: { kind: 'channel', chan: c }, channels: [...channels, c] };
         return;
       }
       case 'part':
       case 'leave': {
         const named = args[0]?.startsWith('#') ? chanName(args[0]) : null;
         const c = named ?? needChan();
+        leaving.current.add(c);
         await part(uid, nick, c, named ? args.slice(1).join(' ') : rest);
         closeWindow(`#${c}`);
         return;
@@ -376,6 +382,7 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
         if (other === uid) throw new Error('That is you');
         const shownNick = (await whois(target))?.nick ?? target;
         openWindow({ kind: 'pm', uid: other, nick: shownNick });
+        live.current = { ...live.current, activeWin: { kind: 'pm', uid: other, nick: shownNick } };
         const text = args.slice(1).join(' ');
         if (cmd.toLowerCase() === 'msg' && text) await sayPrivately(uid, nick, other, text);
         return;
@@ -437,6 +444,7 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
       case 'close':
         if (activeWin.kind === 'status') throw new Error('The status window stays open');
         if (activeWin.kind === 'channel') {
+          leaving.current.add(activeWin.chan);
           await part(uid, nick, activeWin.chan);
         }
         closeWindow(where);
@@ -455,18 +463,63 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
     }
   };
 
+  /** The popup for a nick: talk privately, whois, and for ops the channel actions. */
+  const nickMenu: OnNickMenu = (e, target) => {
+    e.preventDefault();
+    const items: MenuItem[] = [];
+    const isMe = target.uid === uid;
+    if (!isMe) items.push({ label: t('menuQuery'), run: () => openWindow({ kind: 'pm', uid: target.uid, nick: target.nick }) });
+    items.push({ label: t('menuWhois'), run: () => submit(`/whois ${target.nick}`) });
+    const c = target.channel;
+    if (c?.iAmOp && !isMe) {
+      items.push('separator');
+      items.push({ label: c.op ? t('menuDeop') : t('menuOp'), run: () => submit(`/${c.op ? 'deop' : 'op'} ${target.nick}`) });
+      items.push({ label: c.voice ? t('menuDevoice') : t('menuVoice'), run: () => submit(`/${c.voice ? 'devoice' : 'voice'} ${target.nick}`) });
+      items.push('separator');
+      items.push({ label: t('menuKick'), run: () => submit(`/kick ${target.nick}`), danger: true });
+      items.push({ label: t('menuBan'), run: () => submit(`/ban ${target.nick}`), danger: true });
+    }
+    setMenu({ x: e.clientX, y: e.clientY, title: target.nick, items });
+  };
+
+  /** The popup for a window button: leave a channel, close a private window. */
+  const windowMenu = (e: React.MouseEvent, w: Win) => {
+    e.preventDefault();
+    if (w.kind === 'status') return;
+    const items: MenuItem[] =
+      w.kind === 'channel'
+        ? [
+            { label: t('menuList'), run: () => submit('/list') },
+            'separator',
+            { label: `${t('menuLeave')} #${w.chan}`, run: () => submit(`/part #${w.chan}`), danger: true },
+          ]
+        : [
+            { label: t('menuWhois'), run: () => submit(`/whois ${w.nick}`) },
+            { label: t('menuClose'), run: () => closeWindow(keyOf(w)) },
+          ];
+    setMenu({ x: e.clientX, y: e.clientY, title: titleOf(w), items });
+  };
+
+  /** A macro either fills the input line (text ending in a space or "#") or runs line by line. */
+  const runMacro = async (m: Macro) => {
+    if (fillsInput(m)) return setFill({ text: m.text, n: Date.now() });
+    for (const line of m.text.split('\n').filter((l) => l.trim())) await submit(line);
+  };
+
   return (
     // IRC reads left to right even in Hebrew; each message lays out its own text (<bdi>).
     <main className="irc" dir="ltr">
       <div className="irc-titlebar">
-        <span>The Institute — {nick}{away ? ' (away)' : ''}</span>
+        <span>InstituteIRC — {nick}{away ? ' (away)' : ''}</span>
       </div>
+      <MacroBar macros={macros} onChange={setMacros} onRun={runMacro} helpOpen={helpOpen} onHelp={() => setHelpOpen(!helpOpen)} />
       <div className="irc-body">
+        {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
         <nav className="irc-switchbar" aria-label="Windows">
           {windows.map((w) => {
             const k = keyOf(w);
             return (
-              <button key={k} type="button" className={`${k === active ? 'active' : ''} ${unread[k] ? 'unread' : ''}`} onClick={() => setActive(k)}>
+              <button key={k} type="button" className={`${k === active ? 'active' : ''} ${unread[k] ? 'unread' : ''}`} onClick={() => setActive(k)} onContextMenu={(e) => windowMenu(e, w)}>
                 {titleOf(w)}
               </button>
             );
@@ -481,7 +534,7 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
             onNew: () => k !== active && noteUnread(k),
           };
           if (w.kind === 'status') return <Status key={k} {...props} />;
-          if (w.kind === 'pm') return <PrivateWindow key={k} {...props} me={uid} other={w.uid} nick={w.nick} />;
+          if (w.kind === 'pm') return <PrivateWindow key={k} {...props} me={uid} other={w.uid} nick={w.nick} onNickMenu={nickMenu} />;
           return (
             <ChannelWindow
               key={k}
@@ -491,15 +544,19 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
               presence={presence}
               onTopic={(text) => (topics.current[w.chan] = text)}
               onKicked={() => {
+                // Leaving on purpose also removes you; only a removal you didn't ask for is a kick.
+                if (leaving.current.delete(w.chan)) return;
                 closeWindow(k);
                 echo('status', `*** You were kicked from #${w.chan}`, 'error');
               }}
               onQuery={(other, n) => openWindow({ kind: 'pm', uid: other, nick: n })}
+              onNickMenu={nickMenu}
             />
           );
         })}
       </div>
-      <InputLine onSubmit={submit} placeholder={activeWin.kind === 'status' ? '/join #institute' : `${titleOf(activeWin)}…`} />
+      {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
+      <InputLine onSubmit={submit} fill={fill} placeholder={activeWin.kind === 'status' ? '/join #institute' : `${titleOf(activeWin)}…`} />
     </main>
   );
 }
@@ -513,7 +570,9 @@ interface WindowProps {
   onNew: () => void;
 }
 
-function Lines({ lines, hidden }: { lines: Line[]; hidden: boolean }) {
+function Lines({ lines, hidden, onNick }: { lines: Line[]; hidden: boolean; onNick?: (e: React.MouseEvent, uid: string, nick: string) => void }) {
+  const menuFor = (l: Line) =>
+    onNick && l.uid && l.nick ? { onContextMenu: (e: React.MouseEvent) => onNick(e, l.uid!, l.nick!), className: 'irc-nick clickable' } : { className: 'irc-nick' };
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => {
@@ -534,14 +593,14 @@ function Lines({ lines, hidden }: { lines: Line[]; hidden: boolean }) {
           <span className="irc-time">{time(l.at)} </span>
           {l.kind === 'msg' ? (
             <>
-              <span className="irc-nick">&lt;{l.nick}&gt;</span>{' '}
+              <span {...menuFor(l)}>&lt;{l.nick}&gt;</span>{' '}
               <bdi>
                 <Formatted text={l.text} />
               </bdi>
             </>
           ) : l.kind === 'action' ? (
             <>
-              * {l.nick}{' '}
+              * <span {...menuFor(l)}>{l.nick}</span>{' '}
               <bdi>
                 <Formatted text={l.text} />
               </bdi>
@@ -586,7 +645,16 @@ function useLog(path: string, where: string, onNew: () => void) {
   return lines;
 }
 
-function PrivateWindow({ hidden, local, clearedAt, onNew, me, other, nick }: WindowProps & { me: string; other: string; nick: string }) {
+function PrivateWindow({
+  hidden,
+  local,
+  clearedAt,
+  onNew,
+  me,
+  other,
+  nick,
+  onNickMenu,
+}: WindowProps & { me: string; other: string; nick: string; onNickMenu: OnNickMenu }) {
   const lines = useLog(`pm/${pairId(me, other)}`, nick, onNew);
   return (
     <section className="irc-window" hidden={hidden}>
@@ -594,7 +662,7 @@ function PrivateWindow({ hidden, local, clearedAt, onNew, me, other, nick }: Win
         {nick} — <a href={hrefOf({ page: 'member', uid: other })}>page</a>
       </div>
       <div className="irc-main">
-        <Lines lines={merge(lines, local, clearedAt)} hidden={hidden} />
+        <Lines lines={merge(lines, local, clearedAt)} hidden={hidden} onNick={(e, u, n) => onNickMenu(e, { uid: u, nick: n })} />
       </div>
     </section>
   );
@@ -611,6 +679,7 @@ function ChannelWindow({
   onTopic,
   onKicked,
   onQuery,
+  onNickMenu,
 }: WindowProps & {
   chan: string;
   me: string;
@@ -618,6 +687,7 @@ function ChannelWindow({
   onTopic: (t: string) => void;
   onKicked: () => void;
   onQuery: (uid: string, nick: string) => void;
+  onNickMenu: OnNickMenu;
 }) {
   const lines = useLog(`messages/${chan}`, `#${chan}`, onNew);
   const [meta, setMeta] = useState<Channel | null>(null);
@@ -650,9 +720,15 @@ function ChannelWindow({
   const nicks = useMemo(() => {
     const rank = (u: string) => (meta?.ops[u] ? 0 : meta?.voice[u] ? 1 : 2);
     return Object.entries(people)
-      .map(([u, p]) => ({ uid: u, nick: p.nick, rank: rank(u), away: presence[u]?.away }))
+      .map(([u, p]) => ({ uid: u, nick: p.nick, rank: rank(u), away: presence[u]?.away, online: u in presence }))
       .sort((a, b) => a.rank - b.rank || a.nick.localeCompare(b.nick, undefined, { sensitivity: 'base' }));
   }, [people, meta, presence]);
+
+  const standing = (u: string, n: string): NickTarget => ({
+    uid: u,
+    nick: n,
+    channel: { iAmOp: Boolean(meta?.ops[me]), op: Boolean(meta?.ops[u]), voice: Boolean(meta?.voice[u]) },
+  });
 
   const modes = meta ? Object.entries(meta.modes).filter(([, on]) => on).map(([m]) => m).join('') : '';
 
@@ -669,11 +745,15 @@ function ChannelWindow({
         ) : null}
       </div>
       <div className="irc-main with-nicks">
-        <Lines lines={merge(lines, local, clearedAt)} hidden={hidden} />
+        <Lines lines={merge(lines, local, clearedAt)} hidden={hidden} onNick={(e, u, n) => onNickMenu(e, standing(u, n))} />
         <ul className="irc-nicklist" aria-label="Nicks">
           {nicks.map((n) => (
-            <li key={n.uid} className={n.away ? 'away' : ''} title={n.away ? `away: ${n.away}` : undefined}>
-              <button type="button" onDoubleClick={() => n.uid !== me && onQuery(n.uid, n.nick)}>
+            <li
+              key={n.uid}
+              className={!n.online ? 'offline' : n.away ? 'away' : ''}
+              title={!n.online ? 'offline' : n.away ? `away: ${n.away}` : undefined}
+            >
+              <button type="button" onDoubleClick={() => n.uid !== me && onQuery(n.uid, n.nick)} onContextMenu={(e) => onNickMenu(e, standing(n.uid, n.nick))}>
                 {n.rank === 0 ? '@' : n.rank === 1 ? '+' : ''}
                 {n.nick}
               </button>
@@ -687,12 +767,22 @@ function ChannelWindow({
 
 // --- The command line, with mIRC's formatting keys -----------------------------------------
 
-function InputLine({ onSubmit, placeholder }: { onSubmit: (s: string) => void; placeholder: string }) {
+function InputLine({ onSubmit, placeholder, fill }: { onSubmit: (s: string) => void; placeholder: string; fill: { text: string; n: number } | null }) {
   const [text, setText] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [pos, setPos] = useState(-1);
   const [palette, setPalette] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+
+  // A macro put some text in: show it with the cursor at the end, ready to finish.
+  useEffect(() => {
+    if (!fill) return;
+    setText(fill.text);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(fill.text.length, fill.text.length);
+    });
+  }, [fill?.n]);
 
   const insert = (code: string) => {
     const el = input.current;

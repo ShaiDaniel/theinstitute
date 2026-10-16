@@ -1,5 +1,6 @@
 // The signed-in member's own settings: their name and who can see their page.
 import { useEffect, useState } from 'react';
+import { DataBackup } from './DataBackup';
 import { useSession } from './auth';
 import { signIn } from './firebase';
 import { useI18n } from './i18n';
@@ -74,6 +75,8 @@ export function Profile() {
         )}
         {failed && <span className="error">{t('saveError')}</span>}
       </div>
+
+      {member && <DataBackup uid={user.uid} name={member.name} />}
     </main>
   );
 }

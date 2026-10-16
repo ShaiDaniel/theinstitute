@@ -26,6 +26,17 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
 - **Each list chooses who sees it**: only me (the default for a new list), members, or everyone. The
   member's name and photo show to visitors only while they have a public list.
 
+### Your data, posters, share links (added 2026-10-16)
+- **Backup** (profile page, "Your data"): download one JSON file with every list, entry, score, tag,
+  note and order, the concerts in them, and the chat macros. **Import** adds a backup's lists as new,
+  private lists next to what's there (never overwrites); recreates missing concerts; skips damaged
+  entries. Not included: debate comments, chat logs.
+- **Poster** (every list page, anyone who can see the list): top 3/5/7/9 like my9albums: covers with
+  rank and score, the ranked titles, list and member names; download as PNG or share from a phone.
+- **Share link** (every list page): copies the list's link, or the phone's share sheet. Tells the
+  owner when the list is private or members-only. (Link previews in WhatsApp still show the site's
+  generic card: per-page previews need a server.)
+
 ### Item pages (one per album, band, song or concert)
 - Cover or photo, basic facts (MusicBrainz, Wikipedia summary), and a 30-second preview for songs (iTunes).
 - **Who ranked it**: every shared list the item is in, with that list's rank, score, tags and note.
@@ -54,6 +65,16 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
   (Ctrl+K/B/U/I/O and a colour picker), logs (last 200 lines per window), links clickable.
 - Commands: /join /part /me /nick /topic /away /whois /msg /query /op /deop /voice /devoice /kick
   /ban /unban /mode (+m moderated, +t only ops set the topic) /list /clear /close /help.
+- **Named InstituteIRC** (decided 2026-10-16). **Membership persists**: you stay in a channel until
+  you /part or are kicked, also with the site closed (offline members shown light grey); channels
+  and topics are never removed. **Right-click** (long-press on phones) a nick: private chat, whois,
+  and for ops op/voice/kick/ban; right-click a window button to leave or close. The help has a
+  **privacy** section (stored, readable by signed-in members, admin can read all, not encrypted).
+- **Help and macros** (added 2026-10-16): a Help button opens a panel with every command, the
+  formatting keys, macros and tips (Hebrew and English; /help prints the commands). A toolbar of
+  macro buttons: presets (/join, /me, /msg, /whois, brb, back, /list, /clear) plus your own; a macro
+  ending in a space or "#" fills the input line, anything else runs, several lines in a row.
+  Saved per browser (syncing across devices would need a database rules change).
 - Whoever creates a channel is its op. #institute is joined by default; joined channels are
   remembered per browser. Nicks are unique, chosen on first visit, changeable with /nick.
 - Enforced by database rules (tests: `npm run test:rules`): own nick only, one post per 0.7 s,
@@ -61,7 +82,7 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
 - Decisions taken without Shai (review): **anyone signed in with a profile can chat** (the database
   can't check the profile, so the rules only require sign-in; ops can kick/ban); nicks can't contain
   [ ] (the database can't store them in keys); event lines are in English like the original.
-- **Open:** the tab's name ("mIRC" is a trademark); modes +i (invite only) and +k (key); App Check
+- **Open:** modes +i (invite only) and +k (key); App Check
   (needs the site registered with reCAPTCHA in the console); quit messages when someone closes the
   page; file sharing (no user uploads for now).
 

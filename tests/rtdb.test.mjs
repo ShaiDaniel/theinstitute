@@ -76,6 +76,18 @@ await test('messages cannot be edited or deleted', async () => {
 });
 
 await test('anyone sets the topic by default', () => ok(set(ref(bob, 'channels/institute/topic'), { text: 'nu-metal forever', nick: 'Bob', at: now })));
+await test('nobody can wipe a topic, ops included', async () => {
+  await denied(remove(ref(bob, 'channels/institute/topic')));
+  await denied(remove(ref(alice, 'channels/institute/topic')));
+});
+await test('channels can never be removed', async () => {
+  await denied(remove(ref(alice, 'channels/institute')));
+  await denied(remove(ref(alice, 'channels/institute/createdBy')));
+  await denied(remove(ref(bob, 'channels/institute')));
+});
+await test('membership stays after the connection ends (no auto-leave)', async () => {
+  assert.equal((await get(ref(alice, 'occupants/institute/bob'))).val().nick, 'Bob');
+});
 await test('non-op cannot set modes', () => denied(set(ref(bob, 'channels/institute/modes/t'), true)));
 await test('op sets +t', () => ok(set(ref(alice, 'channels/institute/modes/t'), true)));
 await test('+t: non-op cannot set the topic', () => denied(set(ref(bob, 'channels/institute/topic'), { text: 'mine', nick: 'Bob', at: now })));

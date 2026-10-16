@@ -47,7 +47,7 @@
           ".validate": "newData.val() === now"
         },
         "topic": {
-          ".write": "auth != null && !root.child('channels').child($chan).child('bans').child(auth.uid).exists() && (root.child('channels').child($chan).child('modes').child('t').val() !== true || root.child('channels').child($chan).child('ops').child(auth.uid).exists())",
+          ".write": "auth != null && newData.exists() && !root.child('channels').child($chan).child('bans').child(auth.uid).exists() && (root.child('channels').child($chan).child('modes').child('t').val() !== true || root.child('channels').child($chan).child('ops').child(auth.uid).exists())",
           ".validate": "newData.hasChildren(['text', 'nick', 'at'])",
           "text": { ".validate": "newData.isString() && newData.val().length <= 300" },
           "nick": { ".validate": "newData.val() === root.child('users').child(auth.uid).child('nick').val()" },

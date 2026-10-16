@@ -198,25 +198,30 @@ export async function whoRanked(itemId: string, viewer: 'member' | 'visitor'): P
   return snap.docs.map((d) => toEntry(d.data()));
 }
 
+/** The stored form of an entry (also used by import, so both write exactly the same thing). */
+export const entryData = (list: List, item: Item, position: number, verdict: Verdict) => ({
+  uid: list.uid,
+  listId: list.id,
+  kind: item.kind,
+  itemId: item.itemId,
+  title: item.title.slice(0, 300),
+  artist: item.artist.slice(0, 300),
+  year: item.year,
+  image: item.image,
+  ref: item.ref,
+  position,
+  score: verdict.score,
+  tags: verdict.tags,
+  note: verdict.note.trim().slice(0, NOTE_MAX),
+  visibility: list.visibility,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+});
+
+export const entryDoc = (list: List, itemId: string) => entryRef(list.uid, list.id, itemId);
+
 export async function addEntry(list: List, item: Item, position: number, verdict: Verdict) {
-  await setDoc(entryRef(list.uid, list.id, item.itemId), {
-    uid: list.uid,
-    listId: list.id,
-    kind: item.kind,
-    itemId: item.itemId,
-    title: item.title.slice(0, 300),
-    artist: item.artist.slice(0, 300),
-    year: item.year,
-    image: item.image,
-    ref: item.ref,
-    position,
-    score: verdict.score,
-    tags: verdict.tags,
-    note: verdict.note.trim().slice(0, NOTE_MAX),
-    visibility: list.visibility,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  await setDoc(entryRef(list.uid, list.id, item.itemId), entryData(list, item, position, verdict));
 }
 
 export const updateVerdict = (e: Entry, v: Verdict) =>

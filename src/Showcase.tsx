@@ -34,6 +34,7 @@ import { useI18n, type StringKey } from './i18n';
 import { loadMember, type Member } from './members';
 import { concertDateOf, concertId, concertItemId, createConcert, formatDate, loadConcert, PLACE_MAX, type Concert, type ConcertPlace } from './concerts';
 import { KINDS, resolve, search, type Found, type Item, type Kind } from './music';
+import { ListTools } from './ListTools';
 import { hrefOf } from './route';
 import { TasteMatch } from './TasteMatch';
 
@@ -297,6 +298,7 @@ export function ListPage({ uid, listId }: { uid: string; listId: string }) {
           {list.name} <span className="muted small">· {t(list.kind)}</span>
         </h3>
       )}
+      <ListTools list={list} entries={entries} owner={owner.name} isOwn={isOwn} />
       {isOwn ? (
         <OwnList list={list} entries={entries} setEntries={setEntries} />
       ) : entries.length === 0 ? (
