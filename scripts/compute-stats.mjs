@@ -7,6 +7,8 @@
 // Writes two documents (clients can read but never write them, see firestore.rules):
 //   stats/public   for visitors: totals of everything, item metrics from public lists
 //   stats/members  for members:  totals of everything, item metrics from public and members-only lists
+// Both also carry "recent": the newest entries from those same lists, with who added them, for the
+// home page feed.
 // Totals count private lists too, as numbers only; nothing from a private list is ever named.
 // stats/source (no client access) remembers what was counted, so unchanged data isn't re-read.
 import { cert, initializeApp } from 'firebase-admin/app';
@@ -53,8 +55,12 @@ if (!force && before && JSON.stringify(before.fingerprint) === JSON.stringify(no
 
 // --- Read everything once -------------------------------------------------------------------
 
-const lists = (await db.collectionGroup('lists').get()).docs.map((d) => d.data());
-const entries = (await db.collectionGroup('entries').get()).docs.map((d) => d.data());
+const listDocs = (await db.collectionGroup('lists').get()).docs;
+const lists = listDocs.map((d) => d.data());
+const listNames = new Map(listDocs.map((d) => [d.id, d.get('name')]));
+const members = new Map((await db.collection('members').get()).docs.map((d) => [d.id, { name: d.get('name'), photo: d.get('photo') ?? null }]));
+// Only entries that belong to a list (anything older is left over from before lists existed).
+const entries = (await db.collectionGroup('entries').get()).docs.map((d) => d.data()).filter((e) => e.listId);
 
 const byKind = (rows) => Object.fromEntries(KINDS.map((k) => [k, rows.filter((r) => r.kind === k).length]));
 const distinct = Object.fromEntries(KINDS.map((k) => [k, new Set(entries.filter((e) => e.kind === k).map((e) => e.itemId)).size]));
@@ -109,8 +115,38 @@ function itemMetrics(scoped) {
   return { mostRanked, topScored, tags, decades };
 }
 
+/** The newest entries, for the feed. A public entry is in a public list, so its member's profile is public too. */
+const RECENT = 20;
+const recent = (scoped) =>
+  scoped
+    .filter((e) => e.createdAt && members.has(e.uid))
+    .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+    .slice(0, RECENT)
+    .map((e) => ({
+      uid: e.uid,
+      member: members.get(e.uid).name,
+      photo: members.get(e.uid).photo,
+      listId: e.listId,
+      listName: listNames.get(e.listId) ?? '',
+      kind: e.kind,
+      itemId: e.itemId,
+      title: e.title,
+      artist: e.artist ?? '',
+      year: e.year ?? null,
+      image: e.image ?? null,
+      score: e.score,
+      tags: e.tags ?? [],
+      at: e.createdAt,
+    }));
+
 const write = (id, scoped) =>
-  db.doc(`stats/${id}`).set({ computedAt: FieldValue.serverTimestamp(), minMembers: MIN_MEMBERS, totals, ...itemMetrics(scoped) });
+  db.doc(`stats/${id}`).set({
+    computedAt: FieldValue.serverTimestamp(),
+    minMembers: MIN_MEMBERS,
+    totals,
+    ...itemMetrics(scoped),
+    recent: recent(scoped),
+  });
 
 await write('public', entries.filter((e) => e.visibility === 'public'));
 await write('members', entries.filter((e) => e.visibility === 'public' || e.visibility === 'members'));

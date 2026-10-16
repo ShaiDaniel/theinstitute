@@ -21,6 +21,24 @@ export interface StatItem {
   average: number;
 }
 
+/** One line of the home feed: a member added something to a shared list. */
+export interface Recent {
+  uid: string;
+  member: string;
+  photo: string | null;
+  listId: string;
+  listName: string;
+  kind: Kind;
+  itemId: string;
+  title: string;
+  artist: string;
+  year: number | null;
+  image: string | null;
+  score: number;
+  tags: Tag[];
+  at: Date;
+}
+
 export interface Stats {
   computedAt: Date | null;
   minMembers: number;
@@ -34,11 +52,16 @@ export interface Stats {
   topScored: Record<Kind, StatItem[]>;
   tags: { tag: Tag; count: number }[];
   decades: { decade: number; count: number }[];
+  recent: Recent[];
 }
 
 export async function loadStats(viewerIsMember: boolean): Promise<Stats | null> {
   const snap = await getDoc(doc(db, 'stats', viewerIsMember ? 'members' : 'public'));
   if (!snap.exists()) return null;
   const x = snap.data();
-  return { ...(x as Stats), computedAt: (x.computedAt as Timestamp | undefined)?.toDate() ?? null };
+  return {
+    ...(x as Stats),
+    computedAt: (x.computedAt as Timestamp | undefined)?.toDate() ?? null,
+    recent: ((x.recent ?? []) as (Omit<Recent, 'at'> & { at: Timestamp })[]).map((r) => ({ ...r, at: r.at.toDate() })),
+  };
 }

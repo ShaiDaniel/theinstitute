@@ -6,7 +6,7 @@ import { useI18n } from './i18n';
 import { KINDS, type Kind } from './music';
 import { hrefOf } from './route';
 import { fmtScore, Picture, useSubtitle } from './Showcase';
-import { loadStats, type StatItem, type Stats } from './stats';
+import { loadStats, type Recent, type StatItem, type Stats } from './stats';
 
 const sum = (r: Record<Kind, number>) => KINDS.reduce((a, k) => a + (r[k] ?? 0), 0);
 
@@ -64,6 +64,13 @@ export function Home() {
         ))}
       </section>
 
+      {stats.recent.length > 0 && (
+        <section className="feed">
+          <h3>{t('feedTitle')}</h3>
+          <Feed items={stats.recent} />
+        </section>
+      )}
+
       <nav className="segmented kinds">
         {KINDS.map((k) => (
           <button key={k} type="button" className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
@@ -109,6 +116,56 @@ export function Home() {
         </p>
       )}
     </main>
+  );
+}
+
+/** "3 hours ago", in the page's language. */
+function useAgo() {
+  const { lang } = useI18n();
+  const rtf = new Intl.RelativeTimeFormat(lang === 'he' ? 'he' : 'en', { numeric: 'auto' });
+  return (d: Date) => {
+    const minutes = Math.round((d.getTime() - Date.now()) / 60000);
+    if (Math.abs(minutes) < 60) return rtf.format(minutes, 'minute');
+    const hours = Math.round(minutes / 60);
+    if (Math.abs(hours) < 24) return rtf.format(hours, 'hour');
+    const days = Math.round(hours / 24);
+    if (Math.abs(days) < 30) return rtf.format(days, 'day');
+    return d.toLocaleDateString(lang === 'he' ? 'he-IL' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+}
+
+function Feed({ items }: { items: Recent[] }) {
+  const { t } = useI18n();
+  const ago = useAgo();
+  const subtitle = useSubtitle();
+  return (
+    <ul className="feed-list">
+      {items.map((r) => (
+        <li key={`${r.listId}/${r.itemId}`}>
+          <a className="who" href={hrefOf({ page: 'member', uid: r.uid })} title={r.member}>
+            {r.photo ? <img className="avatar" src={r.photo} alt="" referrerPolicy="no-referrer" /> : <span className="avatar" />}
+          </a>
+          <Picture src={r.image} kind={r.kind} size={40} />
+          <div className="entry-main">
+            <div>
+              <a className="name" href={hrefOf({ page: 'member', uid: r.uid })}>
+                {r.member}
+              </a>{' '}
+              <span className="muted">{t('feedAdded')}</span>{' '}
+              <a className="title" href={hrefOf({ page: 'item', itemId: r.itemId })}>
+                {r.title}
+              </a>{' '}
+              <span className="muted">{t('feedTo')}</span>{' '}
+              <a href={hrefOf({ page: 'list', uid: r.uid, listId: r.listId })}>{r.listName}</a>
+            </div>
+            <div className="muted small">
+              {subtitle(r)} · {ago(r.at)}
+            </div>
+          </div>
+          <span className="score">{fmtScore(r.score)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

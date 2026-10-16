@@ -38,7 +38,7 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
    published). Concerts are phase 3.
 3. Concerts: shared concerts (band + date), "I was there" via concert lists, wiki-style setlists. ← on
    branch `next` for review.
-4. Home: metrics ← built locally (hourly GitHub Action → stats/public, stats/members); feed later.
+4. Home: metrics (hourly GitHub Action → stats/public, stats/members) ← live; feed ← branch `next`.
 5. Chat (IRC-style; not branded "mIRC", which is a trademark).
 6. Extras: taste match, debates, bot announcements, Last.fm import.
 See `PLAN.md` for details and open questions. Phase 1 is infra only: don't invent features.

@@ -4,13 +4,15 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
 
 ## Pages
 
-### Home: metrics (built locally 2026-10-16), later the feed
+### Home: metrics and feed
 - **Metrics** about everything members added: totals (members, lists, albums/bands/songs ranked and
   how many different), most-ranked and top-scored (min. 3 members) per kind, most-used tags, albums by
   decade. Totals count private lists too, as numbers only; everything that names an item comes from
   shared lists (visitors: public lists; members: public + members-only).
 - Computed **hourly** by a GitHub Action (`scripts/compute-stats.mjs`, admin key in the
   `FIREBASE_SERVICE_ACCOUNT` secret) into `stats/public` and `stats/members`; one read per visit.
+- **Feed** ("Latest", on branch `next`): the 20 newest additions to shared lists, who added them and
+  to which list. Comes from the same hourly job, so it can be up to an hour behind.
 - **Feed**: what members did, newest first: added or re-ranked an album, gave a verdict, logged a
   concert, started a debate.
 - **Group top lists**: The Institute's top albums, bands, songs and concerts, combined from everyone's
