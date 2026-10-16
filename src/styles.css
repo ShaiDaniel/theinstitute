@@ -267,3 +267,24 @@ a { color: inherit; }
   .irc { height: calc(100vh - 170px); }
   .irc-nicklist { width: 96px; font-size: 12px; }
 }
+
+.divisive { margin-bottom: 24px; }
+.divisive h3 { margin: 0 0 6px; }
+.divisive .muted.small { margin: 0 0 8px; }
+
+/* Taste match */
+.taste { margin: -6px 0 16px; }
+.taste-head { all: unset; cursor: pointer; display: inline-flex; align-items: baseline; gap: 10px; }
+.taste-table { margin-top: 8px; border-collapse: collapse; width: 100%; max-width: 560px; }
+.taste-table th, .taste-table td { text-align: start; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.taste-table th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+.taste-table .num { text-align: end; font-variant-numeric: tabular-nums; width: 4em; }
+.taste-table a { text-decoration: none; font-weight: 600; }
+
+/* Debate */
+.debate { margin: 24px 0; max-width: 760px; }
+.comments { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.comments li { display: flex; gap: 10px; align-items: flex-start; }
+.comments .avatar { margin: 0; width: 32px; height: 32px; }
+.comments .name { font-weight: 600; text-decoration: none; }
+.debate-form textarea { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; margin-bottom: 8px; }

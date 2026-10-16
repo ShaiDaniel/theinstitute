@@ -35,6 +35,7 @@ import { loadMember, type Member } from './members';
 import { concertDateOf, concertId, concertItemId, createConcert, formatDate, loadConcert, PLACE_MAX, type Concert, type ConcertPlace } from './concerts';
 import { KINDS, resolve, search, type Found, type Item, type Kind } from './music';
 import { hrefOf } from './route';
+import { TasteMatch } from './TasteMatch';
 
 type ListKind = Kind;
 const LIST_KINDS: ListKind[] = KINDS;
@@ -156,6 +157,7 @@ export function ShowcasePage({ uid }: { uid: string }) {
   return (
     <main className="showcase">
       <OwnerHeader owner={owner} isOwn={isOwn} />
+      {viewer === 'member' && <TasteMatch uid={uid} />}
 
       <nav className="segmented kinds">
         {LIST_KINDS.map((k) => (

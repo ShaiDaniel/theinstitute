@@ -85,21 +85,33 @@ function itemMetrics(scoped) {
     it.lists++;
     it.scores.set(e.uid, [...(it.scores.get(e.uid) ?? []), e.score]);
   }
-  const rows = [...items.values()].map(({ scores, ...it }) => ({
-    ...it,
-    members: scores.size,
+  const rows = [...items.values()].map(({ scores, ...it }) => {
     // Each member counts once: their own average across their lists.
-    average: round1(mean([...scores.values()].map(mean))),
-  }));
+    const perMember = [...scores.values()].map(mean);
+    return {
+      ...it,
+      members: scores.size,
+      average: round1(mean(perMember)),
+      low: Math.min(...perMember),
+      high: Math.max(...perMember),
+      spread: round1(Math.sqrt(mean(perMember.map((x) => (x - mean(perMember)) ** 2)))),
+    };
+  });
 
   const mostRanked = {};
   const topScored = {};
+  const divisive = {};
   for (const k of KINDS) {
     const ofKind = rows.filter((r) => r.kind === k);
     mostRanked[k] = [...ofKind].sort((a, b) => b.lists - a.lists || b.members - a.members || b.average - a.average).slice(0, TOP);
     topScored[k] = ofKind
       .filter((r) => r.members >= MIN_MEMBERS)
       .sort((a, b) => b.average - a.average || b.members - a.members)
+      .slice(0, TOP);
+    // Most divisive: the biggest disagreement (spread of members' scores), same minimum of members.
+    divisive[k] = ofKind
+      .filter((r) => r.members >= MIN_MEMBERS && r.spread > 0)
+      .sort((a, b) => b.spread - a.spread || b.members - a.members)
       .slice(0, TOP);
   }
 
@@ -112,7 +124,7 @@ function itemMetrics(scoped) {
   for (const r of rows) if (r.kind === 'album' && r.year) decadeCounts.set(Math.floor(r.year / 10) * 10, (decadeCounts.get(Math.floor(r.year / 10) * 10) ?? 0) + 1);
   const decades = [...decadeCounts].map(([decade, count]) => ({ decade, count })).sort((a, b) => a.decade - b.decade);
 
-  return { mostRanked, topScored, tags, decades };
+  return { mostRanked, topScored, divisive, tags, decades };
 }
 
 /** The newest entries, for the feed. A public entry is in a public list, so its member's profile is public too. */

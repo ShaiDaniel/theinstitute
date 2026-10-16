@@ -19,6 +19,10 @@ export interface StatItem {
   members: number;
   /** Mean of each member's own average score. */
   average: number;
+  /** Lowest and highest member average, and their standard deviation (for "most divisive"). */
+  low?: number;
+  high?: number;
+  spread?: number;
 }
 
 /** One line of the home feed: a member added something to a shared list. */
@@ -50,6 +54,7 @@ export interface Stats {
   };
   mostRanked: Record<Kind, StatItem[]>;
   topScored: Record<Kind, StatItem[]>;
+  divisive?: Record<Kind, StatItem[]>;
   tags: { tag: Tag; count: number }[];
   decades: { decade: number; count: number }[];
   recent: Recent[];

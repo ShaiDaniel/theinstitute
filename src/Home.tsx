@@ -91,6 +91,16 @@ export function Home() {
         </section>
       </div>
 
+      <section className="divisive">
+        <h3>{t('statDivisive')}</h3>
+        <p className="muted small">{t('statDivisiveHint').replace('{n}', String(stats.minMembers))}</p>
+        <TopList
+          items={stats.divisive?.[kind] ?? []}
+          metric={(i) => `${fmtScore(i.low ?? 0)}–${fmtScore(i.high ?? 0)}`}
+          empty={t('statTopEmpty')}
+        />
+      </section>
+
       <div className="columns">
         <section>
           <h3>{t('statTags')}</h3>

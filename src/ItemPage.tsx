@@ -3,6 +3,7 @@
 // own average across those lists).
 import { useEffect, useState } from 'react';
 import { ConcertFacts } from './ConcertFacts';
+import { Debate } from './Debate';
 import { concertIdOf, loadConcert, type Concert } from './concerts';
 import { useSession } from './auth';
 import { loadEntries, loadList, whoRanked, type Entry, type List } from './entries';
@@ -172,6 +173,8 @@ export function ItemPage({ itemId }: { itemId: string }) {
           </li>
         ))}
       </ul>
+
+      <Debate itemId={itemId} />
 
       {info && info.links.length > 0 && (
         <p className="muted small links">

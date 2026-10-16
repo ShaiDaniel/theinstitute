@@ -65,6 +65,14 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
   (needs the site registered with reCAPTCHA in the console); quit messages when someone closes the
   page; file sharing (no user uploads for now).
 
+### Group extras (built 2026-10-16, on the `next` branch for review)
+- **Most divisive** (home): items where members disagree most (spread of their scores), at least 3
+  members, showing the lowest and highest score.
+- **Taste match** (a member's page, for members): agreement on the items both rated, 100% = same
+  scores, 0% = 9 points apart on average; needs 3 in common; click for the item-by-item table.
+- **Debates** (every item page): a members-only comment thread; authors can delete their own.
+- **Open:** Last.fm import needs a Last.fm API key (free, from Shai's Last.fm account).
+
 ## Group lists
 Group top lists are combined from members' rankings. **Open:** the formula. A starting idea: score
 each entry by its rank position in each member's list, weighted by their score, and require a minimum

@@ -155,6 +155,22 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
+    // Debates: a discussion thread on every album, band, song and concert page. Members only;
+    // everyone writes as themselves, and authors can delete their own comments. The document id is
+    // the item id with ':' as '~' (a ':' in a collection path breaks Firestore's REST queries).
+    match /items/{itemId}/comments/{commentId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'photo', 'text', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && (request.resource.data.photo == null || (request.resource.data.photo is string && request.resource.data.photo.size() <= 2000))
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+        && request.resource.data.createdAt == request.time
+        && itemId.matches('^(album|band|song|concert)~[^/]{1,200}$');
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // Home page metrics, written only by the hourly job (scripts/compute-stats.mjs, admin access).
     // stats/source is the job's own bookkeeping.
     match /stats/public {

@@ -164,6 +164,21 @@ await test('concert list and entry', async () => {
     entry('alice', 'gigs', { kind: 'concert', itemId: `concert:${C}`, title: 'System of a Down', artist: 'Park Hayarkon, Tel Aviv', year: 2005, tags: ['legendaryNight'] })));
 });
 
+// --- Debates ---------------------------------------------------------------------------------
+const T = A.replace(':', '~');
+const D = (id) => `items/${T}/comments/${id}`;
+const comment = (uid, extra = {}) => ({ uid, name: 'Bob', photo: null, text: 'Iowa is better.', createdAt: serverTimestamp(), ...extra });
+await test('member comments as themselves', () => ok(setDoc(doc(bob, D('c1')), comment('bob'))));
+await test('cannot comment as someone else', () => denied(setDoc(doc(bob, D('c2')), comment('alice'))));
+await test('non-member cannot comment', () => denied(setDoc(doc(eve, D('c3')), comment('eve'))));
+await test('empty comment rejected', () => denied(setDoc(doc(bob, D('c4')), comment('bob', { text: '' }))));
+await test('comment on an unknown kind rejected', () => denied(setDoc(doc(bob, 'items/movie~x/comments/c5'), comment('bob'))));
+await test('members read comments', async () => assert.equal((await getDocs(collection(alice, `items/${T}/comments`))).size, 1));
+await test('visitors cannot read comments', () => denied(getDocs(collection(anon, `items/${T}/comments`))));
+await test('comments cannot be edited', () => denied(updateDoc(doc(bob, D('c1')), { text: 'changed' })));
+await test("cannot delete someone else's comment", () => denied(deleteDoc(doc(alice, D('c1')))));
+await test('author deletes own comment', () => ok(deleteDoc(doc(bob, D('c1')))));
+
 await test('anyone reads stats/public', () => ok(getDoc(doc(anon, 'stats/public'))));
 await test('visitor cannot read stats/members', () => denied(getDoc(doc(anon, 'stats/members'))));
 await test('member reads stats/members', () => ok(getDoc(doc(bob, 'stats/members'))));
