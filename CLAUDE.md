@@ -22,7 +22,9 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
 
 ## Plan
 
-1. Foundation: Google sign-in, member profiles, public/private, i18n. ← next
+1. Foundation: Google sign-in, member profiles, public/private, i18n. ← built; rules need publishing
+   Infrastructure only: the profile is deliberately minimal (name, photo, visibility). Nicks, bios,
+   People/member pages etc. wait until Shai defines the site.
 2. Showcase (albums, bands, songs, concerts; search, drag-to-rank, verdicts, scores).
 3. mIRC chat.
 4. Group features: taste match, controversial picks, debates, timeline, bot announcements.
@@ -31,8 +33,10 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
 
 - Firebase project **`theinstitute-8575b`** (created 2026-10-16): Google sign-in enabled (public name
   "The Institute"), authorized domain `shaidaniel.github.io`; Firestore **eur3**, production mode;
-  Realtime Database **europe-west1**, locked mode. **No security rules published yet** — everything
-  is denied until rules are written. Config in `src/firebase-config.ts` (public by design).
+  Realtime Database **europe-west1**, locked mode. Rules live in `firestore.rules` and
+  `database.rules.json` (RTDB stays fully locked until chat); publish them in the Firebase console.
+  `npm run test:rules` checks the Firestore rules in the emulator (firebase-tools pinned to 13 because
+  this machine has Java 17; v14+ needs Java 21). Config in `src/firebase-config.ts` (public by design).
   Google Analytics, Gemini and the Developer Program were left off.
 - Hosting: GitHub Pages from `ShaiDaniel/theinstitute` via `.github/workflows/deploy.yml`.
 

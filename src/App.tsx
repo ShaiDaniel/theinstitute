@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useSession } from './auth';
+import { signIn, signOut } from './firebase';
 import { useI18n, type StringKey } from './i18n';
+import { Profile } from './Profile';
+import { hrefOf, useRoute, type Page } from './route';
 
-type Tab = 'showcase' | 'people' | 'chat' | 'about';
-const TABS: Tab[] = ['showcase', 'people', 'chat', 'about'];
-const INTRO: Record<Tab, StringKey> = {
+const TABS = ['showcase', 'people', 'chat', 'about'] as const;
+const INTRO: Record<(typeof TABS)[number], StringKey> = {
   showcase: 'showcaseIntro',
   people: 'peopleIntro',
   chat: 'chatIntro',
@@ -12,13 +14,16 @@ const INTRO: Record<Tab, StringKey> = {
 
 export function App() {
   const { lang, setLang, t } = useI18n();
-  const [tab, setTab] = useState<Tab>('showcase');
+  const { ready, user, member } = useSession();
+  const page: Page = useRoute();
 
   return (
     <div className="app">
       <header className="top">
         <div className="brand">
-          <h1>The Institute</h1>
+          <h1>
+            <a href="#/">The Institute</a>
+          </h1>
           <p className="muted">{t('tagline')}</p>
         </div>
         <div className="top-actions">
@@ -30,24 +35,47 @@ export function App() {
               עב
             </button>
           </nav>
-          <button type="button" className="btn" disabled title={t('comingSoon')}>
-            {t('signIn')}
-          </button>
+          {ready &&
+            (user ? (
+              <>
+                <a className="me" href={hrefOf('me')} title={t('yourProfile')}>
+                  {user.photoURL && <img src={user.photoURL} alt="" referrerPolicy="no-referrer" />}
+                  <span>{member?.name || user.displayName}</span>
+                </a>
+                <button type="button" className="btn" onClick={() => signOut()}>
+                  {t('signOut')}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn primary" onClick={() => signIn().catch(() => {})}>
+                {t('signIn')}
+              </button>
+            ))}
         </div>
       </header>
 
+      {ready && user && !member && page !== 'me' && (
+        <a className="notice" href={hrefOf('me')}>
+          {t('finishProfile')}
+        </a>
+      )}
+
       <nav className="tabs">
         {TABS.map((id) => (
-          <button key={id} type="button" className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+          <a key={id} href={hrefOf(id)} className={`tab ${page === id ? 'active' : ''}`}>
             {t(id)}
-          </button>
+          </a>
         ))}
       </nav>
 
-      <main className="placeholder">
-        <p>{t(INTRO[tab])}</p>
-        <span className="badge">{t('comingSoon')}</span>
-      </main>
+      {page === 'me' ? (
+        <Profile />
+      ) : (
+        <main className="placeholder">
+          <p>{t(INTRO[page])}</p>
+          <span className="badge">{t('comingSoon')}</span>
+        </main>
+      )}
     </div>
   );
 }

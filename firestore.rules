@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// Security rules for The Institute (Firestore). Published in Firebase console →
+// Firestore Database → Rules. Anything not matched below is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // A member is someone signed in who has created a profile.
+    function isMember() {
+      return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+
+    function validProfile(data) {
+      return data.keys().hasOnly(['name', 'photo', 'visibility', 'createdAt', 'updatedAt'])
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 60
+        && (data.photo == null || (data.photo is string && data.photo.size() <= 2000))
+        && data.visibility in ['public', 'members']
+        && data.updatedAt == request.time;
+    }
+
+    // Member profiles: public ones for everyone, members-only ones for members.
+    // Only the member can write their own.
+    match /members/{uid} {
+      allow read: if resource.data.visibility == 'public'
+        || isMember()
+        || (signedIn() && request.auth.uid == uid);
+
+      allow create: if signedIn() && request.auth.uid == uid
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if signedIn() && request.auth.uid == uid
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}
