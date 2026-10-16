@@ -1,0 +1,35 @@
+# Recomputes the home page metrics every hour (scripts/compute-stats.mjs). It skips the work when
+# nothing changed. Needs the FIREBASE_SERVICE_ACCOUNT secret (the service account key's JSON);
+# without it the job does nothing.
+name: Home page metrics
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Recompute even if nothing changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stats
+  cancel-in-progress: false
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: node scripts/compute-stats.mjs ${{ inputs.force && '--force' || '' }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

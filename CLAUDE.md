@@ -15,19 +15,32 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
 - **Separate site** from MovieRank, with its **own Firebase project**.
 - **mIRC imitation**: channels (`/join`, `/part`), nick list with live presence (Realtime Database
   `onDisconnect`), private messages, `/me`, `/nick`, `/topic`, `/away`, `/whois`, ops/voice, kick/ban,
-  modes (+m, +i, +k), mIRC colors, logs, file sharing. Enforced by security rules + rate limits +
+  modes (+m, +i, +k), mIRC colors, logs. (File sharing deferred: no user uploads for now.) Enforced by security rules + rate limits +
   App Check. Not end-to-end encrypted (tell members). No bridge to real IRC or WhatsApp.
 - **Music data**: MusicBrainz + Cover Art Archive (open), Spotify/Deezer for search/covers,
   setlist.fm for concert setlists, optional Last.fm import.
 
+- **Unlimited named lists per member**, one kind each; each list is private / members / public (new
+  lists start private). Scores, tags and notes are per list entry. Profile visibility is derived:
+  public while any list is public.
+- **Entries have both a verdict and a score.** Score: 1–10 in half points, required. Verdict:
+  optional personal tags from one shared list (several per entry; list in `PLAN.md`), not a scale.
+- **Concerts are shared**: band + date + venue; members who were there join the same concert, each
+  with their own rank/verdict/score. Photos deferred (no user uploads for now).
+- **Home page = feed + group top lists** (group lists combined from everyone's rankings).
+- Full working plan, open questions and tested data sources: `PLAN.md`.
+
 ## Plan
 
-1. Foundation: Google sign-in, member profiles, public/private, i18n. ← built; rules need publishing
-   Infrastructure only: the profile is deliberately minimal (name, photo, visibility). Nicks, bios,
-   People/member pages etc. wait until Shai defines the site.
-2. Showcase (albums, bands, songs, concerts; search, drag-to-rank, verdicts, scores).
-3. mIRC chat.
-4. Group features: taste match, controversial picks, debates, timeline, bot announcements.
+1. Foundation: Google sign-in, member profiles, public/private, i18n. ← done (profile deliberately minimal)
+2. Showcase: named lists of albums, bands, songs; search (Deezer), drag-to-rank, score + tags, item
+   pages, People list. ← built locally, not yet live (needs the new rules + a collection-group index
+   published). Concerts are phase 3.
+3. Concerts in full: shared concerts, "I was there", setlists.
+4. Home: metrics ← built locally (hourly GitHub Action → stats/public, stats/members); feed later.
+5. Chat (IRC-style; not branded "mIRC", which is a trademark).
+6. Extras: taste match, debates, bot announcements, Last.fm import.
+See `PLAN.md` for details and open questions. Phase 1 is infra only: don't invent features.
 
 ## Infrastructure
 
@@ -39,10 +52,23 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
   this machine has Java 17; v14+ needs Java 21). Config in `src/firebase-config.ts` (public by design).
   Google Analytics, Gemini and the Developer Program were left off.
 - Hosting: GitHub Pages from `ShaiDaniel/theinstitute` via `.github/workflows/deploy.yml`.
+- Home metrics: `.github/workflows/stats.yml` hourly; needs repo secret `FIREBASE_SERVICE_ACCOUNT`
+  (service account key JSON; Shai creates and pastes it, Claude must not handle the key).
+
+## Testing locally
+
+- `npm run emulators` + `npm run dev:emu` (http://localhost:5181): fake project `demo-institute`, fake
+  Google users (sign-in button signs in as "Test Member"; `signInAs('Name')` in the console for others).
+  Never touches real data. Both are in `.claude/launch.json`.
+- `npm run test:rules` uses its own emulator (`firebase.test.json`, port 8095), so it runs beside
+  `npm run emulators`. On Windows the emulator's Java process often survives; stop it before the next run.
+- `npm run stats:emu` recomputes the home metrics against the local emulator.
+- `npm run dev` (port 5180) talks to the real Firebase project.
 
 ## Working with Shai
 
 - Explain plans briefly, then build; ask when a decision is genuinely theirs (privacy, naming).
 - Never overwrite user data while testing; use scratch copies.
 - Firebase console steps (rules, settings) have been done by Claude in Shai's Chrome with consent.
-- Commit with the attribution line; push when work is done.
+- Don't commit until Shai agrees the work is ready (unless a commit is needed to test Firebase on the
+  live site). Commit with the attribution line.

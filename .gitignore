@@ -4,3 +4,7 @@ dist
 *.local
 firebase-debug.log
 firestore-debug.log
+
+# Firebase service account keys: never commit
+*-firebase-adminsdk-*.json
+serviceAccount*.json

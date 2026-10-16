@@ -22,8 +22,8 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
-    // Member profiles: public ones for everyone, members-only ones for members.
-    // Only the member can write their own.
+    // Member profiles (name and photo): public while the member has a public list, otherwise
+    // members-only. Only the member can write their own.
     match /members/{uid} {
       allow read: if resource.data.visibility == 'public'
         || isMember()
@@ -38,6 +38,103 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
 
       allow delete: if signedIn() && request.auth.uid == uid;
+
+      // Showcase lists: named and ranked, one kind each. Each list is private (owner only),
+      // members-only or public.
+      match /lists/{listId} {
+        allow read: if canSee(resource.data.visibility, uid);
+
+        allow create: if signedIn() && request.auth.uid == uid
+          && exists(/databases/$(database)/documents/members/$(uid))
+          && validList(uid, request.resource.data)
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if signedIn() && request.auth.uid == uid
+          && validList(uid, request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'visibility', 'position', 'updatedAt']);
+
+        allow delete: if signedIn() && request.auth.uid == uid;
+
+        // One item in a list (the document id is the item id), with its own score, tags and note.
+        // It carries a copy of the list's visibility, which may be stricter but never looser than
+        // the list's (so the owner can narrow entries before the list, and widen the list first).
+        match /entries/{itemId} {
+          allow read: if canSee(resource.data.visibility, uid);
+
+          allow create: if signedIn() && request.auth.uid == uid
+            && validEntry(uid, listId, itemId, request.resource.data)
+            && request.resource.data.createdAt == request.time;
+
+          allow update: if signedIn() && request.auth.uid == uid
+            && validEntry(uid, listId, itemId, request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['position', 'score', 'tags', 'note', 'visibility', 'image', 'updatedAt']);
+
+          allow delete: if signedIn() && request.auth.uid == uid;
+        }
+      }
+    }
+
+    function canSee(visibility, uid) {
+      return visibility == 'public'
+        || (visibility == 'members' && isMember())
+        || (signedIn() && request.auth.uid == uid);
+    }
+
+    function level(visibility) {
+      return visibility == 'public' ? 2 : (visibility == 'members' ? 1 : 0);
+    }
+
+    function validList(uid, data) {
+      return data.keys().hasOnly(['uid', 'kind', 'name', 'visibility', 'position', 'createdAt', 'updatedAt'])
+        && data.uid == uid
+        && data.kind in ['album', 'band', 'song']
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+        && data.visibility in ['private', 'members', 'public']
+        && data.position is number
+        && data.updatedAt == request.time;
+    }
+
+    function validEntry(uid, listId, itemId, data) {
+      let list = getAfter(/databases/$(database)/documents/members/$(uid)/lists/$(listId));
+      return data.keys().hasOnly(['uid', 'listId', 'kind', 'itemId', 'title', 'artist', 'year', 'image', 'ref',
+                                  'position', 'score', 'tags', 'note', 'visibility', 'createdAt', 'updatedAt'])
+        && list != null
+        && data.visibility in ['private', 'members', 'public']
+        && level(data.visibility) <= level(list.data.visibility)
+        && data.uid == uid
+        && data.listId == listId
+        && data.kind == list.data.kind
+        && data.itemId == itemId
+        && itemId.matches('^' + data.kind + ':[^/]{1,200}$')
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 300
+        && data.artist is string && data.artist.size() <= 300
+        && (data.year == null || data.year is int)
+        && (data.image == null || (data.image is string && data.image.size() <= 1000))
+        && data.ref is string && data.ref.size() <= 100
+        && data.position is number
+        && data.score is number && data.score >= 1 && data.score <= 10
+        && math.floor(data.score * 2) == data.score * 2
+        && data.tags is list && data.tags.size() <= 9
+        && data.tags.toSet().hasOnly(['lifeChanging', 'classic', 'desertIsland', 'guiltyPleasure', 'grewOnMe',
+                                      'underrated', 'overrated', 'agedBadly', 'legendaryNight'])
+        && data.note is string && data.note.size() <= 1000
+        && data.updatedAt == request.time;
+    }
+
+    // Home page metrics, written only by the hourly job (scripts/compute-stats.mjs, admin access).
+    // stats/source is the job's own bookkeeping.
+    match /stats/public {
+      allow read: if true;
+    }
+    match /stats/members {
+      allow read: if isMember();
+    }
+
+    // "Who ranked it": everyone's entries for one item, queried across members.
+    match /{path=**}/entries/{itemId} {
+      allow read: if resource.data.visibility == 'public'
+        || (resource.data.visibility == 'members' && isMember());
     }
   }
 }

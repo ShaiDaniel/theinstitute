@@ -1,6 +1,20 @@
 // Member profiles: members/{uid}, written only by that member. Deliberately minimal for now
-// (name, photo, who can see the page); the rest of the profile is defined with the features.
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, type DocumentData } from 'firebase/firestore/lite';
+// (name, photo). Visibility is not chosen here: each list has its own, and the profile is public
+// while any of the member's lists is public (kept in step by entries.ts), members-only otherwise.
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  type DocumentData,
+} from 'firebase/firestore/lite';
+import { deleteAllLists } from './entries';
 import { db } from './firebase';
 
 export type Visibility = 'public' | 'members';
@@ -11,8 +25,6 @@ export interface Member {
   photo: string | null;
   visibility: Visibility;
 }
-
-export type MemberInput = Omit<Member, 'uid'>;
 
 export const NAME_MAX = 60;
 
@@ -30,16 +42,22 @@ export async function loadMember(uid: string): Promise<Member | null> {
   return snap.exists() ? toMember(uid, snap.data()) : null;
 }
 
-/** Creates or updates the signed-in member's profile. */
-export async function saveMember(uid: string, input: MemberInput, exists: boolean) {
-  const data = {
-    name: input.name.trim().slice(0, NAME_MAX),
-    photo: input.photo,
-    visibility: input.visibility,
-    updatedAt: serverTimestamp(),
-  };
-  if (exists) await updateDoc(memberRef(uid), data);
-  else await setDoc(memberRef(uid), { ...data, createdAt: serverTimestamp() });
+/** Everyone the viewer may see: all members for members, public pages for everyone else. */
+export async function listMembers(viewerIsMember: boolean): Promise<Member[]> {
+  const all = collection(db, 'members');
+  const snap = await getDocs(viewerIsMember ? all : query(all, where('visibility', '==', 'public')));
+  return snap.docs.map((d) => toMember(d.id, d.data())).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export const deleteMember = (uid: string) => deleteDoc(memberRef(uid));
+/** Creates or updates the signed-in member's profile. */
+export async function saveMember(uid: string, input: { name: string; photo: string | null }, previous: Member | null) {
+  const data = { name: input.name.trim().slice(0, NAME_MAX), photo: input.photo, updatedAt: serverTimestamp() };
+  if (previous) await updateDoc(memberRef(uid), data);
+  else await setDoc(memberRef(uid), { ...data, visibility: 'members', createdAt: serverTimestamp() });
+}
+
+/** Removes the member's profile and all their lists. */
+export async function deleteMember(uid: string) {
+  await deleteAllLists(uid);
+  await deleteDoc(memberRef(uid));
+}

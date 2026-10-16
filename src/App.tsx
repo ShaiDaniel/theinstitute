@@ -1,13 +1,16 @@
 import { useSession } from './auth';
 import { signIn, signOut } from './firebase';
 import { useI18n, type StringKey } from './i18n';
+import { Home } from './Home';
+import { ItemPage } from './ItemPage';
+import { People } from './People';
 import { Profile } from './Profile';
-import { hrefOf, useRoute, type Page } from './route';
+import { hrefOf, useRoute, type Route, type Tab } from './route';
+import { ListPage, ShowcasePage } from './Showcase';
 
-const TABS = ['showcase', 'people', 'chat', 'about'] as const;
-const INTRO: Record<(typeof TABS)[number], StringKey> = {
+const TABS: Tab[] = ['home', 'showcase', 'people', 'chat', 'about'];
+const INTRO: Record<'showcase' | 'chat' | 'about', StringKey> = {
   showcase: 'showcaseIntro',
-  people: 'peopleIntro',
   chat: 'chatIntro',
   about: 'aboutIntro',
 };
@@ -15,7 +18,11 @@ const INTRO: Record<(typeof TABS)[number], StringKey> = {
 export function App() {
   const { lang, setLang, t } = useI18n();
   const { ready, user, member } = useSession();
-  const page: Page = useRoute();
+  const route = useRoute();
+  const page = route.page;
+  // Member and item pages belong under People; your own page under Showcase.
+  const activeTab: Tab | null =
+    route.page === 'member' || route.page === 'list' ? (route.uid === user?.uid ? 'showcase' : 'people') : route.page === 'item' || route.page === 'me' ? null : route.page;
 
   return (
     <div className="app">
@@ -62,20 +69,48 @@ export function App() {
 
       <nav className="tabs">
         {TABS.map((id) => (
-          <a key={id} href={hrefOf(id)} className={`tab ${page === id ? 'active' : ''}`}>
+          <a key={id} href={hrefOf(id)} className={`tab ${activeTab === id ? 'active' : ''}`}>
             {t(id)}
           </a>
         ))}
       </nav>
 
-      {page === 'me' ? (
-        <Profile />
-      ) : (
-        <main className="placeholder">
-          <p>{t(INTRO[page])}</p>
-          <span className="badge">{t('comingSoon')}</span>
-        </main>
-      )}
+      {ready && <Page route={route} />}
     </div>
+  );
+}
+
+function Page({ route }: { route: Route }) {
+  const { t } = useI18n();
+  const { user, member } = useSession();
+  switch (route.page) {
+    case 'me':
+      return <Profile />;
+    case 'people':
+      return <People />;
+    case 'member':
+      return <ShowcasePage key={route.uid} uid={route.uid} />;
+    case 'list':
+      return <ListPage key={route.listId} uid={route.uid} listId={route.listId} />;
+    case 'item':
+      return <ItemPage key={route.itemId} itemId={route.itemId} />;
+    case 'home':
+      return <Home />;
+    case 'showcase':
+      if (user && member) return <ShowcasePage key={user.uid} uid={user.uid} />;
+  }
+  return (
+    <main className="placeholder">
+      <p>{t(INTRO[route.page])}</p>
+      {route.page === 'showcase' ? (
+        !user && (
+          <button type="button" className="btn primary" onClick={() => signIn().catch(() => {})}>
+            {t('signIn')}
+          </button>
+        )
+      ) : (
+        <span className="badge">{t('comingSoon')}</span>
+      )}
+    </main>
   );
 }

@@ -3,19 +3,18 @@ import { useEffect, useState } from 'react';
 import { useSession } from './auth';
 import { signIn } from './firebase';
 import { useI18n } from './i18n';
-import { deleteMember, NAME_MAX, saveMember, type Visibility } from './members';
+import { deleteMember, NAME_MAX, saveMember } from './members';
+import { hrefOf } from './route';
 
 export function Profile() {
   const { t } = useI18n();
   const { ready, user, member, reloadMember } = useSession();
   const [name, setName] = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('members');
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<'saved' | 'error' | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     setName(member?.name ?? user?.displayName ?? '');
-    setVisibility(member?.visibility ?? 'members');
   }, [user, member]);
 
   if (!ready) return null;
@@ -32,19 +31,19 @@ export function Profile() {
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
-    setStatus(null);
+    setFailed(false);
     try {
       await action();
       await reloadMember();
-      setStatus('saved');
+      // Done: back to the site (the header shows the saved name).
+      location.hash = hrefOf('showcase');
     } catch {
-      setStatus('error');
-    } finally {
+      setFailed(true);
       setBusy(false);
     }
   };
 
-  const save = () => run(() => saveMember(user.uid, { name, photo: user.photoURL, visibility }, member !== null));
+  const save = () => run(() => saveMember(user.uid, { name, photo: user.photoURL }, member));
   const remove = () => {
     if (confirm(t('deleteConfirm'))) run(() => deleteMember(user.uid));
   };
@@ -59,29 +58,21 @@ export function Profile() {
         <input value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} />
       </label>
 
-      <fieldset className="field">
-        <legend>{t('whoCanSee')}</legend>
-        {(['public', 'members'] as const).map((v) => (
-          <label key={v} className="choice">
-            <input type="radio" name="visibility" checked={visibility === v} onChange={() => setVisibility(v)} />
-            <span>
-              <strong>{t(v === 'public' ? 'visPublic' : 'visMembers')}</strong>
-              <span className="muted"> — {t(v === 'public' ? 'visPublicHint' : 'visMembersHint')}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <p className="muted small">{t('listsPrivacyHint')}</p>
 
       <div className="row">
         <button type="button" className="btn primary" disabled={busy || !name.trim()} onClick={save}>
           {member ? t('save') : t('create')}
         </button>
+        <a className="btn" href={hrefOf('showcase')}>
+          {t('close')}
+        </a>
         {member && (
           <button type="button" className="btn danger" disabled={busy} onClick={remove}>
             {t('deleteProfile')}
           </button>
         )}
-        {status && <span className={status === 'error' ? 'error' : 'muted'}>{t(status === 'error' ? 'saveError' : 'saved')}</span>}
+        {failed && <span className="error">{t('saveError')}</span>}
       </div>
     </main>
   );
