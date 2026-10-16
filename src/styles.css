@@ -215,3 +215,55 @@ a { color: inherit; }
 .feed-list a:hover { text-decoration: underline; }
 .feed-list .name, .feed-list .title { font-weight: 600; }
 .feed-list .score { line-height: 40px; font-size: 1.4rem; }
+
+/* Chat: an imitation of mIRC's window (light, whatever the site theme, like the original) */
+.irc {
+  --irc-chrome: #c0c0c0;
+  --irc-dark: #808080;
+  --irc-light: #ffffff;
+  display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 420px;
+  background: var(--irc-chrome); color: #000; border: 2px solid; border-color: var(--irc-light) var(--irc-dark) var(--irc-dark) var(--irc-light);
+  font-family: 'Fixedsys Excelsior 3.01', Fixedsys, 'Lucida Console', 'Courier New', monospace; font-size: 14px; margin-bottom: 20px;
+}
+.irc-titlebar { background: linear-gradient(90deg, #000080, #1084d0); color: #fff; font-weight: 700; padding: 3px 8px; font-family: Tahoma, 'Segoe UI', sans-serif; font-size: 13px; }
+.irc-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.irc-switchbar { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-bottom: 1px solid var(--irc-dark); }
+.irc-switchbar button {
+  font: 12px Tahoma, 'Segoe UI', sans-serif; color: #000; background: var(--irc-chrome); padding: 3px 10px; cursor: pointer;
+  border: 2px solid; border-color: var(--irc-light) var(--irc-dark) var(--irc-dark) var(--irc-light);
+}
+.irc-switchbar button.active { border-color: var(--irc-dark) var(--irc-light) var(--irc-light) var(--irc-dark); background: #d8d8d8; font-weight: 700; }
+.irc-switchbar button.unread { color: #c00000; }
+.irc-window { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.irc-window[hidden] { display: none; }
+.irc-topic { background: #fff; border-bottom: 1px solid var(--irc-dark); padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.irc-main { flex: 1; display: flex; min-height: 0; }
+.irc-lines { flex: 1; overflow-y: auto; background: #fff; padding: 4px 6px; border: 2px solid; border-color: var(--irc-dark) var(--irc-light) var(--irc-light) var(--irc-dark); }
+.irc-line { white-space: pre-wrap; word-break: break-word; line-height: 1.35; }
+.irc-line a { color: #0000fc; }
+.irc-time { color: #000; }
+.irc-line.action { color: #9c009c; }
+.irc-line.event.join, .irc-line.event.part, .irc-line.event.topic, .irc-line.event.mode, .irc-line.event.nick { color: #009300; }
+.irc-line.event.kick { color: #c00000; }
+.irc-line.event.notice { color: #7f0000; }
+.irc-line.local { color: #00007f; }
+.irc-line.error { color: #c00000; }
+.irc-nicklist {
+  width: 150px; list-style: none; margin: 0; padding: 4px; overflow-y: auto; background: #fff;
+  border: 2px solid; border-color: var(--irc-dark) var(--irc-light) var(--irc-light) var(--irc-dark);
+}
+.irc-nicklist button { all: unset; cursor: default; display: block; width: 100%; }
+.irc-nicklist li.away { color: var(--irc-dark); }
+.irc-input { display: flex; gap: 4px; padding: 3px; position: relative; }
+.irc-input input {
+  flex: 1; font: inherit; color: #000; background: #fff; padding: 3px 5px; outline: none;
+  border: 2px solid; border-color: var(--irc-dark) var(--irc-light) var(--irc-light) var(--irc-dark);
+}
+.irc-colors { background: var(--irc-chrome); border: 2px solid; border-color: var(--irc-light) var(--irc-dark) var(--irc-dark) var(--irc-light); cursor: pointer; }
+.irc-palette { position: absolute; bottom: 100%; inset-inline-start: 3px; display: grid; grid-template-columns: repeat(8, 22px); gap: 2px; padding: 4px; background: var(--irc-chrome); border: 1px solid var(--irc-dark); }
+.irc-palette button { width: 22px; height: 22px; border: 1px solid #000; cursor: pointer; padding: 0; }
+.nick-input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; }
+@media (max-width: 640px) {
+  .irc { height: calc(100vh - 170px); }
+  .irc-nicklist { width: 96px; font-size: 12px; }
+}

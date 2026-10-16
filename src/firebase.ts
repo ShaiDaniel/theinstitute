@@ -14,7 +14,12 @@ import { FIREBASE_CONFIG } from './firebase-config';
 
 export const usingEmulators = import.meta.env.VITE_EMULATORS === '1';
 
-export const app = initializeApp(usingEmulators ? { ...FIREBASE_CONFIG, projectId: 'demo-institute' } : FIREBASE_CONFIG);
+// The database emulator applies the rules to the database named after the project, so use that name.
+export const app = initializeApp(
+  usingEmulators
+    ? { ...FIREBASE_CONFIG, projectId: 'demo-institute', databaseURL: 'http://127.0.0.1:9000?ns=demo-institute-default-rtdb' }
+    : FIREBASE_CONFIG,
+);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 

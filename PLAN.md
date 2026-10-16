@@ -48,8 +48,22 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
 ### People
 - Members (public ones for visitors, all of them for members), with taste match between members.
 
-### Chat
-- IRC-style chat: channels, nick list, private messages, `/me`, ops, modes and so on (see CLAUDE.md).
+### Chat (built 2026-10-16, on the `next` branch for review)
+- An imitation of mIRC on the Realtime Database: switchbar of windows (status, channels, private
+  messages), topic bar, nick list (@ ops, + voice, away greyed), mIRC colours and formatting
+  (Ctrl+K/B/U/I/O and a colour picker), logs (last 200 lines per window), links clickable.
+- Commands: /join /part /me /nick /topic /away /whois /msg /query /op /deop /voice /devoice /kick
+  /ban /unban /mode (+m moderated, +t only ops set the topic) /list /clear /close /help.
+- Whoever creates a channel is its op. #institute is joined by default; joined channels are
+  remembered per browser. Nicks are unique, chosen on first visit, changeable with /nick.
+- Enforced by database rules (tests: `npm run test:rules`): own nick only, one post per 0.7 s,
+  bans block joining/reading/posting, +m and +t, private messages readable only by the two people.
+- Decisions taken without Shai (review): **anyone signed in with a profile can chat** (the database
+  can't check the profile, so the rules only require sign-in; ops can kick/ban); nicks can't contain
+  [ ] (the database can't store them in keys); event lines are in English like the original.
+- **Open:** the tab's name ("mIRC" is a trademark); modes +i (invite only) and +k (key); App Check
+  (needs the site registered with reCAPTCHA in the console); quit messages when someone closes the
+  page; file sharing (no user uploads for now).
 
 ## Group lists
 Group top lists are combined from members' rankings. **Open:** the formula. A starting idea: score

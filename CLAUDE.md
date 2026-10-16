@@ -39,7 +39,8 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
 3. Concerts: shared concerts (band + date), "I was there" via concert lists, wiki-style setlists. ← on
    branch `next` for review.
 4. Home: metrics (hourly GitHub Action → stats/public, stats/members) ← live; feed ← branch `next`.
-5. Chat (IRC-style; not branded "mIRC", which is a trademark).
+5. Chat: mIRC imitation on the Realtime Database (`src/chat/`, `database.rules.json`) ← branch `next`;
+   RTDB rules must be published in the console before it works live.
 6. Extras: taste match, debates, bot announcements, Last.fm import.
 See `PLAN.md` for details and open questions. Phase 1 is infra only: don't invent features.
 
@@ -58,7 +59,7 @@ See `PLAN.md` for details and open questions. Phase 1 is infra only: don't inven
 
 ## Testing locally
 
-- `npm run emulators` + `npm run dev:emu` (http://localhost:5181): fake project `demo-institute`, fake
+- `npm run emulators` (auth, Firestore, Realtime Database) + `npm run dev:emu` (http://localhost:5181): fake project `demo-institute`, fake
   Google users (sign-in button signs in as "Test Member"; `signInAs('Name')` in the console for others).
   Never touches real data. Both are in `.claude/launch.json`.
 - `npm run test:rules` uses its own emulator (`firebase.test.json`, port 8095), so it runs beside

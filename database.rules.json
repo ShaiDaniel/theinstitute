@@ -1,6 +1,133 @@
 {
   "rules": {
     ".read": false,
-    ".write": false
+    ".write": false,
+
+    "nicks": {
+      "$nick": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.uid && newData.parent().parent().child('users').child(auth.uid).child('nick').val().toLowerCase() === $nick) || (data.val() === auth.uid && !newData.exists() && newData.parent().parent().child('users').child(auth.uid).child('nick').val().toLowerCase() !== $nick))",
+        ".validate": "$nick.matches(/^[a-z_{}^|`][a-z0-9_{}^|`-]{0,19}$/)"
+      }
+    },
+
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "nick": {
+          ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z_{}^|`][A-Za-z0-9_{}^|`-]{0,19}$/) && newData.parent().parent().parent().child('nicks').child(newData.val().toLowerCase()).val() === auth.uid"
+        },
+        "away": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['nick', 'at'])",
+        "nick": { ".validate": "newData.val() === newData.parent().parent().parent().child('users').child($uid).child('nick').val()" },
+        "at": { ".validate": "newData.val() === now" },
+        "away": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "channels": {
+      ".read": "auth != null",
+      "$chan": {
+        ".validate": "$chan.matches(/^[a-z0-9_-]{1,30}$/)",
+        "createdBy": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.uid"
+        },
+        "createdAt": {
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.val() === now"
+        },
+        "topic": {
+          ".write": "auth != null && !root.child('channels').child($chan).child('bans').child(auth.uid).exists() && (root.child('channels').child($chan).child('modes').child('t').val() !== true || root.child('channels').child($chan).child('ops').child(auth.uid).exists())",
+          ".validate": "newData.hasChildren(['text', 'nick', 'at'])",
+          "text": { ".validate": "newData.isString() && newData.val().length <= 300" },
+          "nick": { ".validate": "newData.val() === root.child('users').child(auth.uid).child('nick').val()" },
+          "at": { ".validate": "newData.val() === now" },
+          "$other": { ".validate": false }
+        },
+        "ops": {
+          "$uid": {
+            ".write": "auth != null && (root.child('channels').child($chan).child('ops').child(auth.uid).exists() || (!root.child('channels').child($chan).child('createdBy').exists() && $uid === auth.uid && newData.parent().parent().child('createdBy').val() === auth.uid))",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "voice": {
+          "$uid": {
+            ".write": "auth != null && root.child('channels').child($chan).child('ops').child(auth.uid).exists()",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "bans": {
+          "$uid": {
+            ".write": "auth != null && root.child('channels').child($chan).child('ops').child(auth.uid).exists() && $uid !== auth.uid",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "modes": {
+          "$mode": {
+            ".write": "auth != null && root.child('channels').child($chan).child('ops').child(auth.uid).exists()",
+            ".validate": "($mode === 'm' || $mode === 't') && newData.isBoolean()"
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "occupants": {
+      ".read": "auth != null",
+      "$chan": {
+        "$uid": {
+          ".write": "auth != null && ((auth.uid === $uid && (!newData.exists() || !root.child('channels').child($chan).child('bans').child(auth.uid).exists())) || (!newData.exists() && root.child('channels').child($chan).child('ops').child(auth.uid).exists()))",
+          ".validate": "newData.hasChildren(['nick', 'at']) && newData.child('nick').val() === newData.parent().parent().parent().child('users').child($uid).child('nick').val()"
+        }
+      }
+    },
+
+    "messages": {
+      "$chan": {
+        ".read": "auth != null && !root.child('channels').child($chan).child('bans').child(auth.uid).exists()",
+        "$id": {
+          ".write": "auth != null && !data.exists() && newData.child('uid').val() === auth.uid && !root.child('channels').child($chan).child('bans').child(auth.uid).exists() && (root.child('channels').child($chan).child('modes').child('m').val() !== true || root.child('channels').child($chan).child('ops').child(auth.uid).exists() || root.child('channels').child($chan).child('voice').child(auth.uid).exists() || (newData.child('type').val() !== 'msg' && newData.child('type').val() !== 'action')) && newData.parent().parent().parent().child('rate').child(auth.uid).val() === now",
+          ".validate": "newData.hasChildren(['uid', 'nick', 'type', 'text', 'at']) && newData.child('at').val() === now && newData.child('nick').val() === newData.parent().parent().parent().child('users').child(auth.uid).child('nick').val() && newData.child('type').isString() && newData.child('type').val().matches(/^(msg|action|join|part|topic|nick|kick|mode|notice)$/) && newData.child('text').isString() && newData.child('text').val().length <= 500"
+        }
+      }
+    },
+
+    "pm": {
+      "$pair": {
+        ".read": "auth != null && ($pair.beginsWith(auth.uid + '_') || $pair.endsWith('_' + auth.uid))",
+        "$id": {
+          ".write": "auth != null && !data.exists() && ($pair.beginsWith(auth.uid + '_') || $pair.endsWith('_' + auth.uid)) && newData.child('uid').val() === auth.uid && newData.parent().parent().parent().child('rate').child(auth.uid).val() === now",
+          ".validate": "newData.hasChildren(['uid', 'nick', 'type', 'text', 'at']) && newData.child('at').val() === now && newData.child('nick').val() === newData.parent().parent().parent().child('users').child(auth.uid).child('nick').val() && newData.child('type').isString() && newData.child('type').val().matches(/^(msg|action)$/) && newData.child('text').isString() && newData.child('text').val().length <= 500"
+        }
+      }
+    },
+
+    "pmIndex": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$other": {
+          ".write": "auth != null && (auth.uid === $uid || auth.uid === $other)",
+          ".validate": "newData.hasChildren(['at']) && newData.child('at').val() === now"
+        }
+      }
+    },
+
+    "rate": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.val() === now && (!data.exists() || now - data.val() >= 700)"
+      }
+    }
   }
 }

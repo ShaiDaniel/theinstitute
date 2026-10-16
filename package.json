@@ -4,9 +4,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test:rules": "firebase emulators:exec --config firebase.test.json --only firestore --project demo-institute \"node tests/rules.test.mjs\"",
+    "test:rules": "firebase emulators:exec --config firebase.test.json --only firestore,database --project demo-institute \"node tests/rules.test.mjs && node tests/rtdb.test.mjs\"",
     "dev:emu": "vite --mode emulators --port 5181 --strictPort",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-institute",
+    "emulators": "firebase emulators:start --only auth,firestore,database --project demo-institute",
     "stats:emu": "node --env-file-if-exists=.env.stats scripts/compute-stats.mjs --force"
   },
   "dependencies": {

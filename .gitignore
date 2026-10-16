@@ -8,3 +8,7 @@ firestore-debug.log
 # Firebase service account keys: never commit
 *-firebase-adminsdk-*.json
 serviceAccount*.json
+
+# Local-only emulator config
+.firebase-db.local.json
+database-debug.log

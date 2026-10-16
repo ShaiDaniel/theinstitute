@@ -16,6 +16,9 @@
     "singleProjectMode": true,
     "auth": {
       "port": 9099
+    },
+    "database": {
+      "port": 9000
     }
   }
 }

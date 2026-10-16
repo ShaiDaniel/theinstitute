@@ -1,10 +1,26 @@
 {
-  "firestore": { "rules": "firestore.rules" },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "emulators": {
-    "firestore": { "port": 8095 },
-    "hub": { "port": 4410 },
-    "logging": { "port": 4510 },
-    "ui": { "enabled": false },
-    "singleProjectMode": true
+    "firestore": {
+      "port": 8095
+    },
+    "hub": {
+      "port": 4410
+    },
+    "logging": {
+      "port": 4510
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true,
+    "database": {
+      "port": 9010
+    }
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }

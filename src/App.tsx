@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { useSession } from './auth';
 import { signIn, signOut } from './firebase';
 import { useI18n, type StringKey } from './i18n';
@@ -7,6 +8,9 @@ import { People } from './People';
 import { Profile } from './Profile';
 import { hrefOf, useRoute, type Route, type Tab } from './route';
 import { ListPage, ShowcasePage } from './Showcase';
+
+// The chat (and the Realtime Database it needs) loads only when someone opens it.
+const Chat = lazy(() => import('./chat/Chat'));
 
 const TABS: Tab[] = ['home', 'showcase', 'people', 'chat', 'about'];
 const INTRO: Record<'showcase' | 'chat' | 'about', StringKey> = {
@@ -96,6 +100,12 @@ function Page({ route }: { route: Route }) {
       return <ItemPage key={route.itemId} itemId={route.itemId} />;
     case 'home':
       return <Home />;
+    case 'chat':
+      return (
+        <Suspense fallback={<main className="placeholder">{t('loading')}</main>}>
+          <Chat />
+        </Suspense>
+      );
     case 'showcase':
       if (user && member) return <ShowcasePage key={user.uid} uid={user.uid} />;
   }
