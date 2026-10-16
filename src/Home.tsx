@@ -5,7 +5,7 @@ import { signIn } from './firebase';
 import { useI18n } from './i18n';
 import { KINDS, type Kind } from './music';
 import { hrefOf } from './route';
-import { fmtScore, Picture } from './Showcase';
+import { fmtScore, Picture, useSubtitle } from './Showcase';
 import { loadStats, type StatItem, type Stats } from './stats';
 
 const sum = (r: Record<Kind, number>) => KINDS.reduce((a, k) => a + (r[k] ?? 0), 0);
@@ -60,7 +60,7 @@ export function Home() {
         <Tile value={fmt(totals.members)} label={t('statMembers')} />
         <Tile value={fmt(sum(totals.lists))} label={t('statLists')} />
         {KINDS.map((k) => (
-          <Tile key={k} value={fmt(totals.entries[k])} label={t(k)} sub={`${fmt(totals.distinct[k])} ${t('statDifferent')}`} />
+          <Tile key={k} value={fmt(totals.entries[k] ?? 0)} label={t(k)} sub={`${fmt(totals.distinct[k] ?? 0)} ${t('statDifferent')}`} />
         ))}
       </section>
 
@@ -75,12 +75,12 @@ export function Home() {
       <div className="columns">
         <section>
           <h3>{t('statMostRanked')}</h3>
-          <TopList items={stats.mostRanked[kind]} metric={(i) => `${i.lists} ${t(i.lists === 1 ? 'oneList' : 'listsCount')}`} empty={t('statEmpty')} />
+          <TopList items={stats.mostRanked[kind] ?? []} metric={(i) => `${i.lists} ${t(i.lists === 1 ? 'oneList' : 'listsCount')}`} empty={t('statEmpty')} />
         </section>
         <section>
           <h3>{t('statTopScored')}</h3>
           <p className="muted small">{t('statTopScoredHint').replace('{n}', String(stats.minMembers))}</p>
-          <TopList items={stats.topScored[kind]} metric={(i) => fmtScore(i.average)} score empty={t('statTopEmpty')} />
+          <TopList items={stats.topScored[kind] ?? []} metric={(i) => fmtScore(i.average)} score empty={t('statTopEmpty')} />
         </section>
       </div>
 
@@ -123,6 +123,7 @@ function Tile({ value, label, sub }: { value: string; label: string; sub?: strin
 }
 
 function TopList({ items, metric, score, empty }: { items: StatItem[]; metric: (i: StatItem) => string; score?: boolean; empty: string }) {
+  const subtitle = useSubtitle();
   if (items.length === 0) return <p className="muted small">{empty}</p>;
   return (
     <ol className="top-list">
@@ -132,7 +133,7 @@ function TopList({ items, metric, score, empty }: { items: StatItem[]; metric: (
           <Picture src={i.image} kind={i.kind} size={40} />
           <a className="entry-main" href={hrefOf({ page: 'item', itemId: i.itemId })}>
             <span className="title">{i.title}</span>
-            {i.artist && <span className="muted small">{i.artist}</span>}
+            <span className="muted small">{subtitle(i)}</span>
           </a>
           <span className={score ? 'score' : 'muted small'}>{metric(i)}</span>
         </li>

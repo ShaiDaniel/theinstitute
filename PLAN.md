@@ -31,10 +31,16 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
   several lists counts once in the average (their own average).
 - Debates and comments about the item live here.
 
-### Concerts
-- An entry is **band + date + venue** (plus city and country). Setlist optional.
-- Members who were at the same show share **one concert**: "I was there too" adds you to it, and each
-  attendee still gives their own rank, verdict, score and note.
+### Concerts (built 2026-10-16, on the `next` branch for review)
+- A concert is **band + date**, one per band per day, shared by every member who was there (its id
+  is the band's Deezer id plus the date, so the same show is never added twice). Venue, city and
+  country are entered by the first member to add it.
+- "I was there" = the concert is in one of your concert lists, with your own rank, score, tags
+  (including "Legendary night") and note. The concert page shows everyone who shared it.
+- **Shared facts, wiki-style**: any member can correct the venue and edit the **setlist** (one song
+  per line) and add a link to the show on setlist.fm. Band and date never change.
+- **Open:** automatic setlists from setlist.fm need an API key (free, non-commercial) and a small
+  proxy (Cloudflare Worker); until then setlists are typed or pasted by members.
 - **Photos**: later (no user uploads for now; see Infrastructure).
 
 ### People

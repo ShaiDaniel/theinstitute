@@ -134,6 +134,36 @@ await test('delete own entry and list', async () => {
   await ok(deleteDoc(doc(alice, L('alice', 'top'))));
 });
 
+// --- Concerts -------------------------------------------------------------------------------
+const C = 'dz458_2005-06-14';
+const concert = (uid, extra = {}) => ({
+  bandDz: 458, band: 'System of a Down', image: null, date: '2005-06-14', venue: 'Park Hayarkon', city: 'Tel Aviv', country: 'Israel',
+  setlist: [], setlistUrl: null, createdBy: uid, updatedBy: uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+});
+await test('member creates a concert', () => ok(setDoc(doc(bob, `concerts/${C}`), concert('bob'))));
+await test('non-member cannot create a concert', () => denied(setDoc(doc(eve, 'concerts/dz1_2001-01-01'), concert('eve', { bandDz: 1, date: '2001-01-01' }))));
+await test('concert id must be band + date', () => denied(setDoc(doc(bob, 'concerts/dz458_1999-01-01'), concert('bob'))));
+await test('concert needs a venue', () => denied(setDoc(doc(bob, 'concerts/dz2_2002-02-02'), concert('bob', { bandDz: 2, date: '2002-02-02', venue: '' }))));
+await test('cannot claim someone else created it', () => denied(setDoc(doc(bob, 'concerts/dz3_2003-03-03'), concert('alice', { bandDz: 3, date: '2003-03-03' }))));
+await test('anyone reads a concert', async () => assert.equal((await getDoc(doc(anon, `concerts/${C}`))).data().venue, 'Park Hayarkon'));
+await test('another member edits the setlist', () =>
+  ok(updateDoc(doc(alice, `concerts/${C}`), { setlist: ['Prison Song', 'Toxicity'], updatedBy: 'alice', updatedAt: serverTimestamp() })));
+await test('setlist.fm link accepted', () =>
+  ok(updateDoc(doc(alice, `concerts/${C}`), { setlistUrl: 'https://www.setlist.fm/setlist/system-of-a-down/2005/x.html', updatedBy: 'alice', updatedAt: serverTimestamp() })));
+await test('other links rejected', () =>
+  denied(updateDoc(doc(alice, `concerts/${C}`), { setlistUrl: 'https://evil.example/x', updatedBy: 'alice', updatedAt: serverTimestamp() })));
+await test('band and date never change', () =>
+  denied(updateDoc(doc(alice, `concerts/${C}`), { band: 'Other', updatedBy: 'alice', updatedAt: serverTimestamp() })));
+await test('updatedBy must be the editor', () =>
+  denied(updateDoc(doc(alice, `concerts/${C}`), { venue: 'X', updatedBy: 'bob', updatedAt: serverTimestamp() })));
+await test('visitor cannot edit a concert', () => denied(updateDoc(doc(anon, `concerts/${C}`), { venue: 'X', updatedAt: serverTimestamp() })));
+await test('nobody deletes a concert', () => denied(deleteDoc(doc(bob, `concerts/${C}`))));
+await test('concert list and entry', async () => {
+  await ok(setDoc(doc(alice, L('alice', 'gigs')), list('alice', { kind: 'concert', name: 'Best gigs' })));
+  await ok(setDoc(doc(alice, E('alice', 'gigs', `concert:${C}`)),
+    entry('alice', 'gigs', { kind: 'concert', itemId: `concert:${C}`, title: 'System of a Down', artist: 'Park Hayarkon, Tel Aviv', year: 2005, tags: ['legendaryNight'] })));
+});
+
 await test('anyone reads stats/public', () => ok(getDoc(doc(anon, 'stats/public'))));
 await test('visitor cannot read stats/members', () => denied(getDoc(doc(anon, 'stats/members'))));
 await test('member reads stats/members', () => ok(getDoc(doc(bob, 'stats/members'))));

@@ -190,3 +190,17 @@ a { color: inherit; }
 .bar { display: block; height: 100%; background: var(--accent); border-start-end-radius: 4px; border-end-end-radius: 4px; }
 .bar-value { font-size: 0.85rem; color: var(--muted); text-align: end; }
 .updated { text-align: center; }
+
+/* Concerts */
+.concert-fields { display: grid; gap: 8px; margin: 10px 0; }
+.concert-fields input[type='date'], .place input, .concert-facts input, .concert-facts textarea {
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit;
+}
+.place { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.place .field { margin: 0; }
+.notice-inline { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); }
+.concert-facts { margin-bottom: 16px; }
+.concert-facts textarea { width: 100%; }
+.place-line { font-weight: 600; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.setlist { margin: 0 0 8px; padding-inline-start: 1.6em; columns: 2 220px; }
+.setlist li { padding: 1px 0; break-inside: avoid; }

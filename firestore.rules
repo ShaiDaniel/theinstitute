@@ -39,8 +39,8 @@ service cloud.firestore {
 
       allow delete: if signedIn() && request.auth.uid == uid;
 
-      // Showcase lists: named and ranked, one kind each. Each list is private (owner only),
-      // members-only or public.
+      // Showcase lists: named and ranked, one kind each (albums, bands, songs or concerts). Each
+      // list is private (owner only), members-only or public.
       match /lists/{listId} {
         allow read: if canSee(resource.data.visibility, uid);
 
@@ -88,7 +88,7 @@ service cloud.firestore {
     function validList(uid, data) {
       return data.keys().hasOnly(['uid', 'kind', 'name', 'visibility', 'position', 'createdAt', 'updatedAt'])
         && data.uid == uid
-        && data.kind in ['album', 'band', 'song']
+        && data.kind in ['album', 'band', 'song', 'concert']
         && data.name is string && data.name.size() > 0 && data.name.size() <= 80
         && data.visibility in ['private', 'members', 'public']
         && data.position is number
@@ -119,6 +119,39 @@ service cloud.firestore {
         && data.tags.toSet().hasOnly(['lifeChanging', 'classic', 'desertIsland', 'guiltyPleasure', 'grewOnMe',
                                       'underrated', 'overrated', 'agedBadly', 'legendaryNight'])
         && data.note is string && data.note.size() <= 1000
+        && data.updatedAt == request.time;
+    }
+
+    // Concerts: one per band per day (id "dz<band>_<date>"), shared by every member who was there.
+    // Members create them and keep the facts up to date together (venue, setlist); the band and
+    // the date, which make up the id, never change. Attendees' scores live in their own lists.
+    match /concerts/{concertId} {
+      allow read: if true;
+      allow create: if isMember()
+        && validConcert(concertId, request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if isMember()
+        && validConcert(concertId, request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['venue', 'city', 'country', 'setlist', 'setlistUrl', 'updatedBy', 'updatedAt']);
+    }
+
+    function validConcert(concertId, data) {
+      return data.keys().hasOnly(['bandDz', 'band', 'image', 'date', 'venue', 'city', 'country', 'setlist', 'setlistUrl',
+                                  'createdBy', 'updatedBy', 'createdAt', 'updatedAt'])
+        && data.bandDz is int
+        && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && concertId == 'dz' + string(data.bandDz) + '_' + data.date
+        && data.band is string && data.band.size() > 0 && data.band.size() <= 300
+        && (data.image == null || (data.image is string && data.image.size() <= 1000))
+        && data.venue is string && data.venue.size() > 0 && data.venue.size() <= 120
+        && data.city is string && data.city.size() <= 120
+        && data.country is string && data.country.size() <= 120
+        && data.setlist is list && data.setlist.size() <= 80
+        && (data.setlistUrl == null
+            || (data.setlistUrl is string && data.setlistUrl.matches('^https://(www[.])?setlist[.]fm/setlist/[^ ]{1,300}$')))
+        && data.updatedBy == request.auth.uid
         && data.updatedAt == request.time;
     }
 

@@ -5,11 +5,12 @@
 // - Albums: the MusicBrainz release group, looked up once when the album is added, so every
 //   edition (deluxe, remaster) is one album. If MusicBrainz has no match, the Deezer album.
 // - Bands: the Deezer artist.
+// - Concerts: the band's Deezer artist plus the date (see concerts.ts); search finds the band.
 // - Songs: the Deezer artist plus the base title, so the album version, single and live take are one.
 // Pictures and song previews come from Deezer; summaries from Wikipedia via Wikidata.
 
-export type Kind = 'album' | 'band' | 'song';
-export const KINDS: Kind[] = ['album', 'band', 'song'];
+export type Kind = 'album' | 'band' | 'song' | 'concert';
+export const KINDS: Kind[] = ['album', 'band', 'song', 'concert'];
 
 /** A search result. */
 export interface Found {
@@ -147,9 +148,9 @@ export async function search(kind: Kind, q: string): Promise<Found[]> {
       .filter(unique)
       .slice(0, 15);
   }
-  if (kind === 'band') {
+  if (kind === 'band' || kind === 'concert') {
     const r = await deezer<{ data: DzArtist[] }>(`search/artist?limit=15&q=${encodeURIComponent(q)}`);
-    return r.data.map((a) => ({ kind, dz: a.id, title: a.name, artist: '', thumb: a.picture_small, image: a.picture_medium, key: `band:dz${a.id}` }));
+    return r.data.map((a) => ({ kind, dz: a.id, title: a.name, artist: '', thumb: a.picture_small, image: a.picture_medium, key: `${kind}:dz${a.id}` }));
   }
   const r = await deezer<{ data: DzTrack[] }>(`search/track?limit=25&q=${encodeURIComponent(q)}`);
   return r.data
@@ -171,6 +172,7 @@ export async function resolve(f: Found): Promise<Item> {
   const base = { kind: f.kind, title: f.title, artist: f.artist, image: f.image, year: null as number | null, ref: '' };
   if (f.kind === 'song') return { ...base, itemId: f.key, ref: String(f.dz) };
   if (f.kind === 'band') return { ...base, itemId: f.key };
+  if (f.kind === 'concert') throw new Error('Concerts are tied to a date: see concerts.ts');
 
   // Albums: find the release group with the same title by the same band.
   try {
@@ -227,8 +229,9 @@ export async function details(itemId: string, ref: string, lang: 'en' | 'he'): P
     const t = await deezer<DzTrack>(`track/${ref}`).catch(() => null);
     preview = t?.preview || null;
     if (t) links.push({ label: 'Deezer', url: t.link });
-  } else if (kind === 'band') {
-    const dz = id.replace(/^dz/, '');
+  } else if (kind === 'band' || kind === 'concert') {
+    // A concert's summary is its band's.
+    const dz = id.replace(/^dz/, '').replace(/_.*$/, '');
     links.push({ label: 'Deezer', url: `https://www.deezer.com/artist/${dz}` });
     wikidata = await wikidataBy('P2722', dz).catch(() => null);
   } else if (id.startsWith('dz')) {

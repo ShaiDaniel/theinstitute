@@ -12,7 +12,7 @@
 import { cert, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
-const KINDS = ['album', 'band', 'song'];
+const KINDS = ['album', 'band', 'song', 'concert'];
 const TOP = 10;
 /** An item needs scores from at least this many members to be in "top-scored". */
 const MIN_MEMBERS = 3;
@@ -101,7 +101,7 @@ function itemMetrics(scoped) {
   for (const e of scoped) for (const t of e.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
   const tags = [...tagCounts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count);
 
-  // Decades of the different albums (songs and bands have no release year here).
+  // Decades of the different albums (songs and bands have no release year here; concerts are not albums).
   const decadeCounts = new Map();
   for (const r of rows) if (r.kind === 'album' && r.year) decadeCounts.set(Math.floor(r.year / 10) * 10, (decadeCounts.get(Math.floor(r.year / 10) * 10) ?? 0) + 1);
   const decades = [...decadeCounts].map(([decade, count]) => ({ decade, count })).sort((a, b) => a.decade - b.decade);

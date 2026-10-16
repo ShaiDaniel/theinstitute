@@ -1,4 +1,4 @@
-// A member's showcase: their named lists of albums, bands and songs (concerts come in phase 3),
+// A member's showcase: their named lists of albums, bands, songs and concerts,
 // and each list's page. The owner creates lists, chooses who sees each one, searches to add,
 // drags to rank, and gives every entry a score, tags and a note.
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -32,13 +32,14 @@ import {
 } from './entries';
 import { useI18n, type StringKey } from './i18n';
 import { loadMember, type Member } from './members';
-import { resolve, search, type Found, type Kind } from './music';
+import { concertDateOf, concertId, concertItemId, createConcert, formatDate, loadConcert, PLACE_MAX, type Concert, type ConcertPlace } from './concerts';
+import { KINDS, resolve, search, type Found, type Item, type Kind } from './music';
 import { hrefOf } from './route';
 
-type ListKind = Kind | 'concert';
-const LIST_KINDS: ListKind[] = ['album', 'band', 'song', 'concert'];
-const ADD: Record<Kind, StringKey> = { album: 'addAlbum', band: 'addBand', song: 'addSong' };
-const SEARCH: Record<Kind, StringKey> = { album: 'searchAlbum', band: 'searchBand', song: 'searchSong' };
+type ListKind = Kind;
+const LIST_KINDS: ListKind[] = KINDS;
+const ADD: Record<Kind, StringKey> = { album: 'addAlbum', band: 'addBand', song: 'addSong', concert: 'addConcert' };
+const SEARCH: Record<Kind, StringKey> = { album: 'searchAlbum', band: 'searchBand', song: 'searchSong', concert: 'searchConcert' };
 
 class AlreadyInList extends Error {}
 
@@ -160,15 +161,12 @@ export function ShowcasePage({ uid }: { uid: string }) {
         {LIST_KINDS.map((k) => (
           <button key={k} type="button" className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
             {t(k)}
-            {k !== 'concert' && <span className="count">{lists.filter((l) => l.kind === k).length}</span>}
+            <span className="count">{lists.filter((l) => l.kind === k).length}</span>
           </button>
         ))}
       </nav>
 
-      {kind === 'concert' ? (
-        <p className="placeholder">{t('concertsLater')}</p>
-      ) : (
-        <>
+      <>
           {isOwn && <NewList uid={uid} kind={kind} position={lists.length ? Math.max(...lists.map((l) => l.position)) + 1 : 1} />}
           {ofKind.length === 0 ? (
             <p className="placeholder">{t(isOwn ? 'noListsOwn' : 'noListsOther')}</p>
@@ -192,8 +190,7 @@ export function ShowcasePage({ uid }: { uid: string }) {
               ))}
             </ul>
           )}
-        </>
-      )}
+      </>
     </main>
   );
 }
@@ -384,7 +381,17 @@ function ListSettings({ list, onChange }: { list: List; onChange: (l: List) => v
   );
 }
 
+/** "Band · year" for albums and songs; "Venue, City · 14 Jun 2005" for concerts. */
+export function useSubtitle() {
+  const { lang } = useI18n();
+  return (e: { itemId: string; artist: string; year: number | null }) => {
+    const date = concertDateOf(e.itemId);
+    return [e.artist, date ? formatDate(date, lang) : e.year].filter(Boolean).join(' · ');
+  };
+}
+
 function EntryView({ entry, rank, handle, actions }: { entry: Entry; rank: number; handle?: React.ReactNode; actions?: React.ReactNode }) {
+  const subtitle = useSubtitle();
   return (
     <div className="entry">
       {handle}
@@ -394,7 +401,7 @@ function EntryView({ entry, rank, handle, actions }: { entry: Entry; rank: numbe
         <a className="title" href={hrefOf({ page: 'item', itemId: entry.itemId })}>
           {entry.title}
         </a>
-        <div className="muted small">{[entry.artist, entry.year].filter(Boolean).join(' · ')}</div>
+        <div className="muted small">{subtitle(entry)}</div>
         {entry.tags.length > 0 && (
           <div className="chips">
             <TagChips tags={entry.tags} />
@@ -441,8 +448,8 @@ function OwnList({ list, entries, setEntries }: { list: List; entries: Entry[]; 
     attempt(() => movePosition(moved[to], position), snapshot);
   };
 
-  const add = async (found: Found, v: Verdict) => {
-    const item = await resolve(found);
+  const add = async (found: Found, v: Verdict, when?: ConcertWhen) => {
+    const item = found.kind === 'concert' && when ? await concertEntry(list.uid, found, when) : await resolve(found);
     if (entries.some((e) => e.itemId === item.itemId)) throw new AlreadyInList();
     const position = positionFor(entries, v.score);
     await addEntry(list, item, position, v);
@@ -530,8 +537,101 @@ function SortableEntry({ id, children }: { id: string; children: (handle: React.
 
 // --- Search and add ---------------------------------------------------------------------
 
-function AddBox({ kind, inList, onAdd }: { kind: Kind; inList: Set<string>; onAdd: (f: Found, v: Verdict) => Promise<void> }) {
+/** A concert being added: the date, and where it was if no member has added it yet. */
+interface ConcertWhen {
+  date: string;
+  place: ConcertPlace;
+}
+
+/** Finds or creates the shared concert, and returns the item for the member's list. */
+async function concertEntry(uid: string, band: Found, when: ConcertWhen): Promise<Item> {
+  const id = concertId(band.dz, when.date);
+  let concert = await loadConcert(id);
+  if (!concert) {
+    await createConcert(uid, { dz: band.dz, name: band.title, image: band.image }, when.date, when.place);
+    concert = await loadConcert(id);
+  }
+  const c = concert!;
+  return {
+    kind: 'concert',
+    itemId: concertItemId(id),
+    title: c.band,
+    artist: [c.venue, c.city].filter(Boolean).join(', '),
+    year: Number(c.date.slice(0, 4)),
+    image: c.image,
+    ref: id,
+  };
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+/** Date and place for a concert; tells the member when the show is already on the site. */
+function ConcertFields({ band, onChange }: { band: Found; onChange: (w: ConcertWhen | null) => void }) {
   const { t } = useI18n();
+  const [date, setDate] = useState('');
+  const [existing, setExisting] = useState<Concert | null | 'loading'>(null);
+  const [place, setPlace] = useState<ConcertPlace>({ venue: '', city: '', country: '' });
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today() && date >= '1950-01-01';
+
+  useEffect(() => {
+    if (!validDate) {
+      setExisting(null);
+      return;
+    }
+    let live = true;
+    setExisting('loading');
+    loadConcert(concertId(band.dz, date))
+      .then((c) => live && setExisting(c))
+      .catch(() => live && setExisting(null));
+    return () => {
+      live = false;
+    };
+  }, [band.dz, date, validDate]);
+
+  useEffect(() => {
+    if (!validDate || existing === 'loading') onChange(null);
+    else if (existing) onChange({ date, place: existing });
+    else onChange(place.venue.trim() ? { date, place } : null);
+  }, [date, validDate, existing, place]);
+
+  const field = (key: keyof ConcertPlace, label: StringKey, required = false) => (
+    <label className="field">
+      <span>
+        {t(label)}
+        {required && ' *'}
+      </span>
+      <input value={place[key]} maxLength={PLACE_MAX} onChange={(e) => setPlace({ ...place, [key]: e.target.value })} />
+    </label>
+  );
+
+  return (
+    <div className="concert-fields">
+      <label className="field inline">
+        <span>{t('concertDate')} *</span>
+        <input type="date" value={date} min="1950-01-01" max={today()} onChange={(e) => setDate(e.target.value)} />
+      </label>
+      {existing && existing !== 'loading' ? (
+        <p className="notice-inline">
+          {t('concertExists')} <strong>{[existing.venue, existing.city, existing.country].filter(Boolean).join(', ')}</strong>
+        </p>
+      ) : (
+        validDate &&
+        existing === null && (
+          <div className="place">
+            {field('venue', 'venue', true)}
+            {field('city', 'city')}
+            {field('country', 'country')}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function AddBox({ kind, inList, onAdd }: { kind: Kind; inList: Set<string>; onAdd: (f: Found, v: Verdict, when?: ConcertWhen) => Promise<void> }) {
+  const { t } = useI18n();
+  const [when, setWhen] = useState<ConcertWhen | null>(null);
+
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Found[] | null>(null);
   const [state, setState] = useState<'idle' | 'searching' | 'error'>('idle');
@@ -568,7 +668,7 @@ function AddBox({ kind, inList, onAdd }: { kind: Kind; inList: Set<string>; onAd
     setSaving(true);
     setFailed(null);
     try {
-      await onAdd(picked, v);
+      await onAdd(picked, v, when ?? undefined);
       setPicked(null);
       setQ('');
     } catch (e) {
@@ -586,7 +686,15 @@ function AddBox({ kind, inList, onAdd }: { kind: Kind; inList: Set<string>; onAd
           <div className="entry-main">
             <strong>{picked.title}</strong>
             <div className="muted small">{picked.artist}</div>
-            <VerdictForm kind={kind} submitLabel={t('add')} busy={saving} onSubmit={submit} onCancel={() => setPicked(null)} />
+            {kind === 'concert' && <ConcertFields band={picked} onChange={setWhen} />}
+            <VerdictForm
+              kind={kind}
+              submitLabel={t('add')}
+              busy={saving}
+              blocked={kind === 'concert' && !when}
+              onSubmit={submit}
+              onCancel={() => setPicked(null)}
+            />
             {failed && <p className="error">{t(failed)}</p>}
           </div>
         </div>
@@ -633,6 +741,7 @@ function VerdictForm({
   initial,
   submitLabel,
   busy,
+  blocked,
   onSubmit,
   onCancel,
 }: {
@@ -640,6 +749,8 @@ function VerdictForm({
   initial?: Verdict;
   submitLabel: string;
   busy?: boolean;
+  /** Keeps the submit button off until something else in the form is filled in. */
+  blocked?: boolean;
   onSubmit: (v: Verdict) => void;
   onCancel: () => void;
 }) {
@@ -677,7 +788,7 @@ function VerdictForm({
         <textarea rows={2} maxLength={NOTE_MAX} value={note} placeholder={t('notePlaceholder')} onChange={(e) => setNote(e.target.value)} />
       </label>
       <div className="row">
-        <button type="button" className="btn primary" disabled={busy || score === null} onClick={() => score !== null && onSubmit({ score, tags, note })}>
+        <button type="button" className="btn primary" disabled={busy || blocked || score === null} onClick={() => score !== null && onSubmit({ score, tags, note })}>
           {submitLabel}
         </button>
         <button type="button" className="btn" disabled={busy} onClick={onCancel}>
