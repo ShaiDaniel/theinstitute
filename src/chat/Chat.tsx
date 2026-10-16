@@ -1,10 +1,10 @@
-// The chat: an imitation of mIRC. A switchbar of windows (status, channels, private messages),
+// The chat (InstituteIRC), shown in the dock on top of every page (src/ChatDock.tsx): an imitation of mIRC. A switchbar of windows (status, channels, private messages),
 // the conversation, the nick list (@ ops, + voice, away greyed) and a command line that takes
 // /join, /part, /me, /nick, /topic, /away, /whois, /msg, /query, /op, /deop, /voice, /devoice,
 // /kick, /ban, /unban, /mode, /list, /clear, /close and /help, plus a toolbar of macro buttons and a
 // help panel (Macros.tsx, Help.tsx). Data and rules: irc.ts.
 import { get, limitToLast, onChildAdded, onValue, query, ref } from 'firebase/database';
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useSession } from '../auth';
 import { signIn } from '../firebase';
 import { useI18n } from '../i18n';
@@ -103,10 +103,21 @@ function toLine(m: Message, where: string): Line {
 
 // --- Entry: sign in, then a nick -----------------------------------------------------------
 
-export default function Chat() {
-  const { t } = useI18n();
+interface ChatProps {
+  /** False while minimized: messages then count as unread everywhere. */
+  visible: boolean;
+  /** The dock's buttons (minimize, window/sidebar), shown in the title bar. */
+  controls: ReactNode;
+  onUnread: (n: number) => void;
+  /** Called once the member is connected with a nick. */
+  onConnected: () => void;
+}
+
+export default function Chat({ visible, controls, onUnread, onConnected }: ChatProps) {
+  const { t, lang } = useI18n();
   const { ready, user, member } = useSession();
   const [nick, setNickState] = useState<string | null | 'loading'>('loading');
+  const [title, setTitle] = useState('InstituteIRC');
 
   useEffect(() => {
     if (!user) return;
@@ -119,10 +130,11 @@ export default function Chat() {
     };
   }, [user]);
 
-  if (!ready) return null;
-  if (!user || !member) {
-    return (
-      <main className="placeholder">
+  let body: ReactNode;
+  if (!ready) body = null;
+  else if (!user || !member) {
+    body = (
+      <div className="irc-entry" dir={lang === 'he' ? 'rtl' : 'ltr'}>
         <p>{t('chatIntro')}</p>
         <p>{t(user ? 'chatNeedsProfile' : 'chatSignIn')}</p>
         {!user ? (
@@ -134,16 +146,38 @@ export default function Chat() {
             {t('createProfile')}
           </a>
         )}
-      </main>
+      </div>
     );
-  }
-  if (nick === 'loading') return <main className="placeholder">{t('loading')}</main>;
-  if (!nick) return <NickPicker uid={user.uid} name={member.name} onDone={setNickState} />;
-  return <Irc uid={user.uid} initialNick={nick} />;
+  } else if (nick === 'loading') body = <div className="irc-entry">{t('loading')}</div>;
+  else if (!nick) body = <NickPicker uid={user.uid} name={member.name} onDone={setNickState} />;
+  else
+    body = (
+      <Irc
+        key={user.uid}
+        uid={user.uid}
+        initialNick={nick}
+        visible={visible}
+        onTitle={setTitle}
+        onUnread={onUnread}
+        onConnected={onConnected}
+      />
+    );
+
+  return (
+    // IRC reads left to right even in Hebrew; each message lays out its own text (<bdi>).
+    <section className="irc" dir="ltr" aria-label="InstituteIRC">
+      <div className="irc-titlebar">
+        <span className="irc-title">{user && member && nick && nick !== 'loading' ? title : 'InstituteIRC'}</span>
+        <span className="irc-controls">{controls}</span>
+      </div>
+      {body}
+    </section>
+  );
 }
 
 function NickPicker({ uid, name, onDone }: { uid: string; name: string; onDone: (n: string) => void }) {
   const { t } = useI18n();
+  const { lang } = useI18n();
   const [nick, setNick_] = useState(suggestNick(name));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -161,8 +195,8 @@ function NickPicker({ uid, name, onDone }: { uid: string; name: string; onDone: 
     }
   };
   return (
-    <main className="panel">
-      <h2>{t('chooseNick')}</h2>
+    <div className="irc-entry" dir={lang === 'he' ? 'rtl' : 'ltr'}>
+      <h3>{t('chooseNick')}</h3>
       <p className="muted small">{t('chooseNickHint')}</p>
       <form
         className="row"
@@ -178,14 +212,28 @@ function NickPicker({ uid, name, onDone }: { uid: string; name: string; onDone: 
       </form>
       {error && <p className="error">{error}</p>}
       <p className="muted small">{t('chatNotEncrypted')}</p>
-    </main>
+    </div>
   );
 }
 
 // --- The client ----------------------------------------------------------------------------
 
 
-function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
+function Irc({
+  uid,
+  initialNick,
+  visible,
+  onTitle,
+  onUnread,
+  onConnected,
+}: {
+  uid: string;
+  initialNick: string;
+  visible: boolean;
+  onTitle: (t: string) => void;
+  onUnread: (n: number) => void;
+  onConnected: () => void;
+}) {
   const { t } = useI18n();
   const [nick, setNickState] = useState(initialNick);
   const [windows, setWindows] = useState<Win[]>([{ kind: 'status' }]);
@@ -274,7 +322,15 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
   );
 
   const noteUnread = useCallback((key: string) => setUnread((u) => ({ ...u, [key]: (u[key] ?? 0) + 1 })), []);
-  useEffect(() => setUnread((u) => ({ ...u, [active]: 0 })), [active]);
+  // What's in front of you is read; while minimized, nothing is.
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  useEffect(() => {
+    if (visible) setUnread((u) => ({ ...u, [active]: 0 }));
+  }, [active, visible]);
+  useEffect(() => onUnread(Object.values(unread).reduce((a, b) => a + b, 0)), [unread]);
+  useEffect(() => onTitle(`InstituteIRC — ${nick}${away ? ' (away)' : ''}`), [nick, away]);
+  useEffect(() => onConnected(), []);
 
   const run = async (input: string) => {
     const { activeWin, channels } = live.current;
@@ -507,11 +563,7 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
   };
 
   return (
-    // IRC reads left to right even in Hebrew; each message lays out its own text (<bdi>).
-    <main className="irc" dir="ltr">
-      <div className="irc-titlebar">
-        <span>InstituteIRC — {nick}{away ? ' (away)' : ''}</span>
-      </div>
+    <>
       <MacroBar macros={macros} onChange={setMacros} onRun={runMacro} helpOpen={helpOpen} onHelp={() => setHelpOpen(!helpOpen)} />
       <div className="irc-body">
         {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
@@ -531,7 +583,7 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
             hidden: k !== active,
             local: local[k] ?? [],
             clearedAt: clearedAt.current[k] ?? 0,
-            onNew: () => k !== active && noteUnread(k),
+            onNew: () => (k !== active || !visibleRef.current) && noteUnread(k),
           };
           if (w.kind === 'status') return <Status key={k} {...props} />;
           if (w.kind === 'pm') return <PrivateWindow key={k} {...props} me={uid} other={w.uid} nick={w.nick} onNickMenu={nickMenu} />;
@@ -556,8 +608,13 @@ function Irc({ uid, initialNick }: { uid: string; initialNick: string }) {
         })}
       </div>
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
-      <InputLine onSubmit={submit} fill={fill} placeholder={activeWin.kind === 'status' ? '/join #institute' : `${titleOf(activeWin)}…`} />
-    </main>
+      <InputLine
+        onSubmit={submit}
+        fill={fill}
+        visible={visible}
+        placeholder={activeWin.kind === 'status' ? '/join #institute' : `${titleOf(activeWin)}…`}
+      />
+    </>
   );
 }
 
@@ -767,12 +824,27 @@ function ChannelWindow({
 
 // --- The command line, with mIRC's formatting keys -----------------------------------------
 
-function InputLine({ onSubmit, placeholder, fill }: { onSubmit: (s: string) => void; placeholder: string; fill: { text: string; n: number } | null }) {
+function InputLine({
+  onSubmit,
+  placeholder,
+  fill,
+  visible,
+}: {
+  onSubmit: (s: string) => void;
+  placeholder: string;
+  fill: { text: string; n: number } | null;
+  visible: boolean;
+}) {
   const [text, setText] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [pos, setPos] = useState(-1);
   const [palette, setPalette] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+
+  // Opening the chat puts the cursor in the input line.
+  useEffect(() => {
+    if (visible) requestAnimationFrame(() => input.current?.focus({ preventScroll: true }));
+  }, [visible]);
 
   // A macro put some text in: show it with the cursor at the end, ready to finish.
   useEffect(() => {
@@ -861,7 +933,6 @@ function InputLine({ onSubmit, placeholder, fill }: { onSubmit: (s: string) => v
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
         aria-label="Message or /command"
-        autoFocus
       />
     </div>
   );

@@ -65,6 +65,10 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
   (Ctrl+K/B/U/I/O and a colour picker), logs (last 200 lines per window), links clickable.
 - Commands: /join /part /me /nick /topic /away /whois /msg /query /op /deop /voice /devoice /kick
   /ban /unban /mode (+m moderated, +t only ops set the topic) /list /clear /close /help.
+- **Not a page, a dock** (2026-10-16): the chat sits over every page: minimized to a bar in the
+  corner with an unread count, a floating window, or a sidebar (the page makes room; left in
+  Hebrew); full screen on phones. It stays connected while browsing; once used, it loads minimized
+  on every visit. The menu's InstituteIRC button opens and closes it; old #/chat links open it.
 - **Named InstituteIRC** (decided 2026-10-16). **Membership persists**: you stay in a channel until
   you /part or are kicked, also with the site closed (offline members shown light grey); channels
   and topics are never removed. **Right-click** (long-press on phones) a nick: private chat, whois,

@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { useEffect } from 'react';
 import { useSession } from './auth';
+import { ChatDockProvider, useChatDock } from './ChatDock';
 import { signIn, signOut } from './firebase';
 import { useI18n, type StringKey } from './i18n';
 import { Home } from './Home';
@@ -9,21 +10,33 @@ import { Profile } from './Profile';
 import { hrefOf, useRoute, type Route, type Tab } from './route';
 import { ListPage, ShowcasePage } from './Showcase';
 
-// The chat (and the Realtime Database it needs) loads only when someone opens it.
-const Chat = lazy(() => import('./chat/Chat'));
-
 const TABS: Tab[] = ['home', 'showcase', 'people', 'chat', 'about'];
-const INTRO: Record<'showcase' | 'chat' | 'about', StringKey> = {
+const INTRO: Record<'showcase' | 'about', StringKey> = {
   showcase: 'showcaseIntro',
-  chat: 'chatIntro',
   about: 'aboutIntro',
 };
 
 export function App() {
+  return (
+    <ChatDockProvider>
+      <Site />
+    </ChatDockProvider>
+  );
+}
+
+function Site() {
   const { lang, setLang, t } = useI18n();
   const { ready, user, member } = useSession();
   const route = useRoute();
   const page = route.page;
+  const dock = useChatDock();
+
+  // The chat isn't a page: an old #/chat link opens it on top of the home page.
+  useEffect(() => {
+    if (route.page !== 'chat') return;
+    dock.open();
+    location.replace(`${location.pathname}${location.search}#/`);
+  }, [route.page]);
   // Member and item pages belong under People; your own page under Showcase.
   const activeTab: Tab | null =
     route.page === 'member' || route.page === 'list' ? (route.uid === user?.uid ? 'showcase' : 'people') : route.page === 'item' || route.page === 'me' ? null : route.page;
@@ -72,11 +85,18 @@ export function App() {
       )}
 
       <nav className="tabs">
-        {TABS.map((id) => (
-          <a key={id} href={hrefOf(id)} className={`tab ${activeTab === id ? 'active' : ''}`}>
-            {t(id)}
-          </a>
-        ))}
+        {TABS.map((id) =>
+          id === 'chat' ? (
+            // Opens and closes the chat over the current page.
+            <button key={id} type="button" className={`tab ${dock.mode !== 'min' ? 'active' : ''}`} onClick={dock.toggle} aria-pressed={dock.mode !== 'min'}>
+              {t(id)}
+            </button>
+          ) : (
+            <a key={id} href={hrefOf(id)} className={`tab ${activeTab === id ? 'active' : ''}`}>
+              {t(id)}
+            </a>
+          ),
+        )}
       </nav>
 
       {ready && <Page route={route} />}
@@ -101,11 +121,7 @@ function Page({ route }: { route: Route }) {
     case 'home':
       return <Home />;
     case 'chat':
-      return (
-        <Suspense fallback={<main className="placeholder">{t('loading')}</main>}>
-          <Chat />
-        </Suspense>
-      );
+      return <Home />;
     case 'showcase':
       if (user && member) return <ShowcasePage key={user.uid} uid={user.uid} />;
   }
