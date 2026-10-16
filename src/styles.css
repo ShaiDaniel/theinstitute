@@ -367,11 +367,11 @@ a { color: inherit; }
 /* The chat dock: minimized bar, floating window, or sidebar, over every page */
 .chat-dock { position: fixed; z-index: 30; }
 .chat-dock[hidden] { display: none; }
-.chat-dock.window { bottom: 16px; inset-inline-end: 16px; width: min(780px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); }
-.chat-dock.sidebar { top: 0; bottom: 0; inset-inline-end: 0; width: 440px; }
+.chat-dock.window { bottom: 16px; inset-inline-end: 16px; width: min(var(--chat-w, 780px), calc(100vw - 32px)); height: min(var(--chat-h, 560px), calc(100vh - 32px)); }
+.chat-dock.sidebar { top: 0; bottom: 0; inset-inline-end: 0; width: var(--chat-side, 440px); }
 .chat-dock .irc { height: 100%; min-height: 0; margin: 0; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6); }
 .chat-dock.sidebar .irc-nicklist { width: 110px; }
-html.chat-docked body { padding-inline-end: 440px; }
+html.chat-docked body { padding-inline-end: var(--chat-side, 440px); }
 .irc-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .irc-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .irc-controls { display: flex; gap: 2px; flex: none; }
@@ -399,3 +399,138 @@ html.chat-docked body { padding-inline-end: 440px; }
   .chat-dock .irc { box-shadow: none; border: none; }
 }
 @media (prefers-reduced-motion: reduce) { .chat-pill.has-unread { animation: none; } }
+
+/* Resizing the chat: invisible strips on the free edges, a grip in the free corner */
+.dock-resize { position: absolute; z-index: 2; touch-action: none; }
+.dock-resize:focus-visible { outline: 2px solid #1084d0; outline-offset: -2px; }
+.chat-dock .rz-side { top: 0; bottom: 0; inset-inline-start: -4px; width: 8px; cursor: ew-resize; }
+.chat-dock .rz-top { inset-inline: 0; top: -4px; height: 8px; cursor: ns-resize; }
+.chat-dock .rz-corner { top: -5px; inset-inline-start: -5px; width: 18px; height: 18px; cursor: nwse-resize; z-index: 3; }
+html[dir='rtl'] .chat-dock .rz-corner { cursor: nesw-resize; }
+.chat-dock .rz-corner::after {
+  content: ''; position: absolute; inset: 5px; border-top: 2px dotted #c0c0c0; border-inline-start: 2px dotted #c0c0c0; opacity: 0.8;
+}
+.chat-dock.sidebar .rz-side:hover, .chat-dock .rz-side:active, .chat-dock .rz-top:hover { background: rgba(16, 132, 208, 0.35); }
+html.chat-resizing, html.chat-resizing * { user-select: none; cursor: inherit !important; }
+html.chat-resizing .irc { pointer-events: none; }
+@media (max-width: 900px) { .dock-resize { display: none; } }
+
+/* ===== Home: the opening (Hero.tsx) ===== */
+html, body { overflow-x: clip; }
+/* The hero stays in the page's column (so its words line up with the header); only the art bleeds
+   to the screen's edges (the page clips anything wider, see html/body above). */
+.hero {
+  position: relative; isolation: isolate; display: flex; align-items: flex-end;
+  margin-top: -24px; margin-bottom: 40px; min-height: min(86vh, 820px);
+}
+.hero.compact { min-height: min(46vh, 440px); }
+.hero-art { position: absolute; inset-block: 0; inset-inline: calc(50% - 50vw); z-index: -1; pointer-events: none; overflow: hidden; background: var(--bg); }
+
+/* A wall of the group's covers, drifting */
+.cover-wall {
+  position: absolute; inset: -12% -8%; display: grid; align-content: center; gap: 14px;
+  transform: rotate(-5deg) scale(1.08); transform-origin: center;
+}
+.cover-row { display: flex; gap: 14px; width: max-content; animation: cover-drift 100s linear infinite; }
+.cover-row.reverse { animation-direction: reverse; }
+.cover-row img {
+  width: clamp(120px, 15vw, 210px); aspect-ratio: 1; object-fit: cover; border-radius: 3px;
+  filter: grayscale(0.55) contrast(1.05) brightness(0.5); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+@keyframes cover-drift { to { transform: translateX(-50%); } }
+[dir='rtl'] .cover-row { animation-name: cover-drift-rtl; }
+@keyframes cover-drift-rtl { to { transform: translateX(50%); } }
+
+/* Before there are covers: a record, half out of the frame */
+.vinyl-wrap {
+  position: absolute; top: 50%; inset-inline-end: -16vmin; width: min(108vmin, 980px); aspect-ratio: 1; transform: translateY(-50%);
+  border-radius: 50%; box-shadow: 0 30px 120px rgba(0, 0, 0, 0.85);
+}
+.vinyl {
+  position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; animation: vinyl-turn 36s linear infinite;
+  background:
+    radial-gradient(circle, transparent 0 32.6%, rgba(0, 0, 0, 0.9) 33% 34%, transparent 34.4%),
+    repeating-radial-gradient(circle, #101014 0 1.5px, #18181e 1.5px 2.6px, #0e0e12 2.6px 3.4px),
+    #0e0e12;
+}
+.vinyl-wrap::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 210deg, transparent 0deg, rgba(255, 255, 255, 0.09) 18deg, transparent 40deg, transparent 180deg, rgba(255, 255, 255, 0.06) 200deg, transparent 222deg);
+}
+.vinyl-label {
+  width: 32%; aspect-ratio: 1; border-radius: 50%; display: grid; place-content: center; text-align: center; gap: 4px;
+  background: radial-gradient(circle, #0b0b0f 0 4%, #c9361f 4.5% 100%); color: #f4e9e4; box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.18);
+}
+.vinyl-label span { font-family: var(--display); font-size: clamp(1rem, 2.6vmin, 1.8rem); letter-spacing: 0.08em; }
+.vinyl-label small { font-size: clamp(0.55rem, 1.2vmin, 0.8rem); letter-spacing: 0.3em; opacity: 0.8; }
+@keyframes vinyl-turn { to { transform: rotate(360deg); } }
+
+/* Light, shade and grain over the art */
+.hero-shade {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(55% 50% at 88% 8%, rgba(232, 64, 44, 0.26), transparent 70%),
+    radial-gradient(120% 90% at 50% 40%, transparent 40%, rgba(11, 11, 15, 0.75) 100%),
+    linear-gradient(to top, var(--bg) 2%, rgba(11, 11, 15, 0.82) 30%, rgba(11, 11, 15, 0.3) 65%, rgba(11, 11, 15, 0.55) 100%);
+}
+[dir='rtl'] .hero-shade {
+  background:
+    radial-gradient(55% 50% at 12% 8%, rgba(232, 64, 44, 0.26), transparent 70%),
+    radial-gradient(120% 90% at 50% 40%, transparent 40%, rgba(11, 11, 15, 0.75) 100%),
+    linear-gradient(to top, var(--bg) 2%, rgba(11, 11, 15, 0.82) 30%, rgba(11, 11, 15, 0.3) 65%, rgba(11, 11, 15, 0.55) 100%);
+}
+.hero-grain {
+  position: absolute; inset: 0; opacity: 0.09; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* The words */
+.hero-content { width: 100%; padding-bottom: 56px; }
+.hero-eyebrow { margin: 0 0 10px; color: var(--accent); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; }
+.hero-title { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(3.6rem, 12vw, 10.5rem); line-height: 0.84; letter-spacing: 0.01em; color: #f3f1f8; }
+.hero.compact .hero-title { font-size: clamp(2.6rem, 7vw, 5.4rem); line-height: 0.9; }
+.hero-line { max-width: 46ch; margin: 18px 0 0; font-size: clamp(1rem, 1.6vw, 1.2rem); color: #cfcde0; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.hero-actions .btn { padding: 10px 18px; font-weight: 600; text-decoration: none; }
+.btn.ghost { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.28); color: var(--text); backdrop-filter: blur(4px); }
+.btn.ghost:hover { border-color: rgba(255, 255, 255, 0.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-row, .vinyl { animation: none; }
+}
+@media (max-width: 640px) {
+  .hero { min-height: 78vh; }
+  .hero.compact { min-height: 38vh; }
+  .hero-content { padding-bottom: 36px; }
+  .vinyl-wrap { width: 128vmin; inset-inline-end: -48vmin; top: 36%; }
+}
+
+/* ===== Home: below the opening ===== */
+.home h3 { font-family: var(--display); font-weight: 400; font-size: 1.9rem; letter-spacing: 0.04em; margin: 0 0 10px; }
+.credits { display: flex; flex-wrap: wrap; margin: 0 0 40px; border-block: 1px solid var(--border); }
+.credits .tile { flex: 1 1 140px; background: none; border: none; border-radius: 0; padding: 18px 16px; border-inline-start: 1px solid var(--border); }
+.credits .tile:first-child { border-inline-start: none; }
+.credits .tile-value { font-size: 3.2rem; color: #f3f1f8; }
+.credits .tile-label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.75rem; }
+.feed { margin-bottom: 40px; }
+.most-ranked { margin: 8px 0 40px; }
+.cover-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.cover-grid a { display: grid; gap: 4px; text-decoration: none; }
+.cover-frame { position: relative; display: block; border-radius: 6px; overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.cover-frame .pic { width: 100%; height: auto; aspect-ratio: 1; display: block; border-radius: 0; transition: transform 0.4s ease, filter 0.4s ease; filter: saturate(0.9); }
+.cover-grid a:hover .pic { transform: scale(1.04); filter: saturate(1.1); }
+.cover-rank {
+  position: absolute; inset-inline-start: 0; bottom: 0; padding: 18px 10px 4px; width: 100%;
+  font-family: var(--display); font-size: 2.4rem; line-height: 1; color: #fff; background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
+}
+.cover-title { font-weight: 600; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cover-metric { color: var(--accent); font-size: 0.85rem; font-weight: 600; }
+.home .kinds { margin-bottom: 18px; }
+
+.feed .more { margin-top: 8px; color: var(--muted); }
+
+/* Hebrew has no capitals: wide tracking just breaks the words up */
+[dir='rtl'] .hero-eyebrow, [dir='rtl'] .credits .tile-label { letter-spacing: 0.04em; }
+
+/* Room for the minimized chat bar, so it never covers the end of a page */
+.app { padding-bottom: 72px; }

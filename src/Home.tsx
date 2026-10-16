@@ -1,7 +1,8 @@
-// The home page: numbers about everything the group has ranked (see stats.ts).
+// The home page: an immersive opening (Hero.tsx), then numbers about everything the group has
+// ranked (see stats.ts): the latest additions, most ranked as a wall of covers, top scored, and more.
 import { useEffect, useState } from 'react';
 import { useSession } from './auth';
-import { signIn } from './firebase';
+import { Hero } from './Hero';
 import { useI18n } from './i18n';
 import { KINDS, type Kind } from './music';
 import { hrefOf } from './route';
@@ -27,16 +28,15 @@ export function Home() {
     };
   }, [ready, member]);
 
-  // Visitors get a line about the site and the sign-in button; members go straight to the numbers.
-  const intro =
-    ready && !user ? (
-      <section className="intro">
-        <p>{t('showcaseIntro')}</p>
-        <button type="button" className="btn primary" onClick={() => signIn().catch(() => {})}>
-          {t('signIn')}
-        </button>
-      </section>
-    ) : null;
+  // The hero's wall: every cover the numbers below show (shared lists only), newest first.
+  const covers =
+    stats && typeof stats === 'object'
+      ? [
+          ...stats.recent.map((r) => r.image),
+          ...KINDS.flatMap((k) => [...(stats.mostRanked[k] ?? []), ...(stats.topScored[k] ?? []), ...(stats.divisive?.[k] ?? [])].map((i) => i.image)),
+        ].filter((x): x is string => Boolean(x))
+      : [];
+  const intro = ready ? <Hero covers={covers} name={member?.name ?? null} signedIn={Boolean(user)} /> : null;
 
   if (stats === null) return <main>{intro}</main>;
   if (stats === 'error' || stats === 'none')
@@ -56,7 +56,7 @@ export function Home() {
     <main className="home">
       {intro}
 
-      <section className="tiles">
+      <section className="credits" aria-label={t('statsTitle')}>
         <Tile value={fmt(totals.members)} label={t('statMembers')} />
         <Tile value={fmt(sum(totals.lists))} label={t('statLists')} />
         {KINDS.map((k) => (
@@ -79,27 +79,27 @@ export function Home() {
         ))}
       </nav>
 
+      <section className="most-ranked">
+        <h3>{t('statMostRanked')}</h3>
+        <CoverGrid items={stats.mostRanked[kind] ?? []} metric={(i) => `${i.lists} ${t(i.lists === 1 ? 'oneList' : 'listsCount')}`} empty={t('statEmpty')} />
+      </section>
+
       <div className="columns">
-        <section>
-          <h3>{t('statMostRanked')}</h3>
-          <TopList items={stats.mostRanked[kind] ?? []} metric={(i) => `${i.lists} ${t(i.lists === 1 ? 'oneList' : 'listsCount')}`} empty={t('statEmpty')} />
-        </section>
         <section>
           <h3>{t('statTopScored')}</h3>
           <p className="muted small">{t('statTopScoredHint').replace('{n}', String(stats.minMembers))}</p>
           <TopList items={stats.topScored[kind] ?? []} metric={(i) => fmtScore(i.average)} score empty={t('statTopEmpty')} />
         </section>
+        <section>
+          <h3>{t('statDivisive')}</h3>
+          <p className="muted small">{t('statDivisiveHint').replace('{n}', String(stats.minMembers))}</p>
+          <TopList
+            items={stats.divisive?.[kind] ?? []}
+            metric={(i) => `${fmtScore(i.low ?? 0)}–${fmtScore(i.high ?? 0)}`}
+            empty={t('statTopEmpty')}
+          />
+        </section>
       </div>
-
-      <section className="divisive">
-        <h3>{t('statDivisive')}</h3>
-        <p className="muted small">{t('statDivisiveHint').replace('{n}', String(stats.minMembers))}</p>
-        <TopList
-          items={stats.divisive?.[kind] ?? []}
-          metric={(i) => `${fmtScore(i.low ?? 0)}–${fmtScore(i.high ?? 0)}`}
-          empty={t('statTopEmpty')}
-        />
-      </section>
 
       <div className="columns">
         <section>
@@ -144,38 +144,49 @@ function useAgo() {
   };
 }
 
+const FEED_FIRST = 6;
+
 function Feed({ items }: { items: Recent[] }) {
   const { t } = useI18n();
   const ago = useAgo();
   const subtitle = useSubtitle();
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, FEED_FIRST);
   return (
-    <ul className="feed-list">
-      {items.map((r) => (
-        <li key={`${r.listId}/${r.itemId}`}>
-          <a className="who" href={hrefOf({ page: 'member', uid: r.uid })} title={r.member}>
-            {r.photo ? <img className="avatar" src={r.photo} alt="" referrerPolicy="no-referrer" /> : <span className="avatar" />}
-          </a>
-          <Picture src={r.image} kind={r.kind} size={40} />
-          <div className="entry-main">
-            <div>
-              <a className="name" href={hrefOf({ page: 'member', uid: r.uid })}>
-                {r.member}
-              </a>{' '}
-              <span className="muted">{t('feedAdded')}</span>{' '}
-              <a className="title" href={hrefOf({ page: 'item', itemId: r.itemId })}>
-                {r.title}
-              </a>{' '}
-              <span className="muted">{t('feedTo')}</span>{' '}
-              <a href={hrefOf({ page: 'list', uid: r.uid, listId: r.listId })}>{r.listName}</a>
+    <>
+      <ul className="feed-list">
+        {shown.map((r) => (
+          <li key={`${r.listId}/${r.itemId}`}>
+            <a className="who" href={hrefOf({ page: 'member', uid: r.uid })} title={r.member}>
+              {r.photo ? <img className="avatar" src={r.photo} alt="" referrerPolicy="no-referrer" /> : <span className="avatar" />}
+            </a>
+            <Picture src={r.image} kind={r.kind} size={40} />
+            <div className="entry-main">
+              <div>
+                <a className="name" href={hrefOf({ page: 'member', uid: r.uid })}>
+                  {r.member}
+                </a>{' '}
+                <span className="muted">{t('feedAdded')}</span>{' '}
+                <a className="title" href={hrefOf({ page: 'item', itemId: r.itemId })}>
+                  {r.title}
+                </a>{' '}
+                <span className="muted">{t('feedTo')}</span>{' '}
+                <a href={hrefOf({ page: 'list', uid: r.uid, listId: r.listId })}>{r.listName}</a>
+              </div>
+              <div className="muted small">
+                {subtitle(r)} · {ago(r.at)}
+              </div>
             </div>
-            <div className="muted small">
-              {subtitle(r)} · {ago(r.at)}
-            </div>
-          </div>
-          <span className="score">{fmtScore(r.score)}</span>
-        </li>
-      ))}
-    </ul>
+            <span className="score">{fmtScore(r.score)}</span>
+          </li>
+        ))}
+      </ul>
+      {items.length > FEED_FIRST && (
+        <button type="button" className="link more" onClick={() => setAll(!all)}>
+          {t(all ? 'feedLess' : 'feedMore').replace('{n}', String(items.length - FEED_FIRST))}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -186,6 +197,29 @@ function Tile({ value, label, sub }: { value: string; label: string; sub?: strin
       <span className="tile-label">{label}</span>
       {sub && <span className="muted small">{sub}</span>}
     </div>
+  );
+}
+
+/** Most ranked as covers: the picture first, rank on it, how many lists underneath. */
+function CoverGrid({ items, metric, empty }: { items: StatItem[]; metric: (i: StatItem) => string; empty: string }) {
+  const subtitle = useSubtitle();
+  if (items.length === 0) return <p className="muted small">{empty}</p>;
+  return (
+    <ol className="cover-grid">
+      {items.map((i, n) => (
+        <li key={i.itemId}>
+          <a href={hrefOf({ page: 'item', itemId: i.itemId })}>
+            <span className="cover-frame">
+              <Picture src={i.image} kind={i.kind} size={300} />
+              <span className="cover-rank">{n + 1}</span>
+            </span>
+            <span className="cover-title">{i.title}</span>
+            <span className="muted small">{subtitle(i)}</span>
+            <span className="cover-metric">{metric(i)}</span>
+          </a>
+        </li>
+      ))}
+    </ol>
   );
 }
 

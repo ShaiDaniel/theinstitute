@@ -5,6 +5,11 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
 ## Pages
 
 ### Home: metrics and feed
+- **The opening (2026-10-17)**: an immersive hero: a dim, slowly drifting wall of the group's own covers
+  (from shared lists only) with film grain and one red light, under the name; before there are
+  enough covers, a record turning slowly, half out of frame. Members get a shorter version that greets
+  them by name. The numbers are a credits band; most-ranked is a wall of covers; the feed shows 6 at
+  first. Motion stops for "reduce motion".
 - **Metrics** about everything members added: totals (members, lists, albums/bands/songs ranked and
   how many different), most-ranked and top-scored (min. 3 members) per kind, most-used tags, albums by
   decade. Totals count private lists too, as numbers only; everything that names an item comes from
@@ -69,6 +74,8 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
   corner with an unread count, a floating window, or a sidebar (the page makes room; left in
   Hebrew); full screen on phones. It stays connected while browsing; once used, it loads minimized
   on every visit. The menu's InstituteIRC button opens and closes it; old #/chat links open it.
+  **Resizable** (2026-10-17): drag the window's top, side or corner, or the sidebar's inner edge
+  (arrow keys too; double-click for the default size); sizes are remembered per browser.
 - **Named InstituteIRC** (decided 2026-10-16). **Membership persists**: you stay in a channel until
   you /part or are kicked, also with the site closed (offline members shown light grey); channels
   and topics are never removed. **Right-click** (long-press on phones) a nick: private chat, whois,
