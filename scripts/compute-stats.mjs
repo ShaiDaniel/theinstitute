@@ -11,7 +11,10 @@
 // home page feed.
 // Totals count private lists too, as numbers only; nothing from a private list is ever named.
 // stats/source (no client access) remembers what was counted, so unchanged data isn't re-read.
+// It also announces new additions to public lists in the chat's #institute, as the bot
+// "TheInstitute" (Realtime Database, admin access; see announce() below).
 import { cert, initializeApp } from 'firebase-admin/app';
+import { getDatabase, ServerValue } from 'firebase-admin/database';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 const KINDS = ['album', 'band', 'song', 'concert'];
@@ -24,7 +27,15 @@ if (!emulator && !process.env.FIREBASE_SERVICE_ACCOUNT) {
   console.log('No FIREBASE_SERVICE_ACCOUNT set; nothing to do.');
   process.exit(0);
 }
-initializeApp(emulator ? { projectId: 'demo-institute' } : { credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
+// The chat database (public address; see src/firebase-config.ts). The emulator's is named after the project.
+const DATABASE_URL = emulator
+  ? `http://${process.env.FIREBASE_DATABASE_EMULATOR_HOST ?? '127.0.0.1:9000'}?ns=demo-institute-default-rtdb`
+  : 'https://theinstitute-8575b-default-rtdb.europe-west1.firebasedatabase.app';
+initializeApp(
+  emulator
+    ? { projectId: 'demo-institute', databaseURL: DATABASE_URL }
+    : { credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)), databaseURL: DATABASE_URL },
+);
 const db = getFirestore();
 
 // --- Has anything changed since the last run? (a few cheap reads) -------------------------
@@ -162,5 +173,50 @@ const write = (id, scoped) =>
 
 await write('public', entries.filter((e) => e.visibility === 'public'));
 await write('members', entries.filter((e) => e.visibility === 'public' || e.visibility === 'members'));
-await sourceRef.set({ fingerprint: now, computedAt: FieldValue.serverTimestamp() });
+// --- Announce new additions to public lists in #institute ------------------------------------
+
+const BOT = { uid: 'institute-bot', nick: 'TheInstitute' };
+const CHANNEL = 'institute';
+const MAX_ANNOUNCE = 10;
+
+const fmtScore = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+function announcement(e) {
+  const who = members.get(e.uid)?.name ?? 'Someone';
+  const list = listNames.get(e.listId) ?? '';
+  if (e.kind === 'concert') {
+    const date = /_(\d{4}-\d{2}-\d{2})$/.exec(e.itemId)?.[1] ?? '';
+    return `${who} was at ${e.title} (${[e.artist, date].filter(Boolean).join(', ')}) — ${fmtScore(e.score)}, in "${list}"`;
+  }
+  return `${who} added ${e.title}${e.artist ? ` (${e.artist})` : ''} to "${list}" — ${fmtScore(e.score)}`;
+}
+
+async function announce(since) {
+  const rtdb = getDatabase();
+  if (!(await rtdb.ref(`channels/${CHANNEL}/createdBy`).get()).exists()) return;
+  // Reserve the bot's nick so nobody else can take it.
+  await rtdb.ref().update({ [`users/${BOT.uid}/nick`]: BOT.nick, [`nicks/${BOT.nick.toLowerCase()}`]: BOT.uid });
+  const fresh = entries
+    .filter((e) => e.visibility === 'public' && e.createdAt && e.createdAt.toMillis() > since)
+    .sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
+  const lines = fresh.slice(0, MAX_ANNOUNCE).map(announcement);
+  if (fresh.length > MAX_ANNOUNCE) lines.push(`…and ${fresh.length - MAX_ANNOUNCE} more. See the home page.`);
+  const changes = {};
+  for (const text of lines) {
+    changes[`messages/${CHANNEL}/${rtdb.ref(`messages/${CHANNEL}`).push().key}`] = { uid: BOT.uid, nick: BOT.nick, type: 'notice', text: text.slice(0, 500), at: ServerValue.TIMESTAMP };
+  }
+  if (lines.length) await rtdb.ref().update(changes);
+  console.log(`Announced ${lines.length} line(s).`);
+}
+
+// The first run only starts the clock, so old additions aren't announced all at once.
+const announcedAt = before?.announcedAt ?? Date.now();
+try {
+  await Promise.race([announce(announcedAt), new Promise((_, no) => setTimeout(() => no(new Error('timed out')), 20000))]);
+} catch (e) {
+  console.log('Announcements skipped:', e.message);
+}
+
+await sourceRef.set({ fingerprint: now, computedAt: FieldValue.serverTimestamp(), announcedAt: Date.now() });
 console.log('Stats written.', totals);
+
+process.exit(0);

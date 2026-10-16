@@ -71,6 +71,8 @@ Working plan agreed with Shai. Items marked **Open** still need a decision.
 - **Taste match** (a member's page, for members): agreement on the items both rated, 100% = same
   scores, 0% = 9 points apart on average; needs 3 in common; click for the item-by-item table.
 - **Debates** (every item page): a members-only comment thread; authors can delete their own.
+- **Bot** (chat): the hourly job posts new additions to *public* lists in #institute as
+  "TheInstitute" (at most 10 per run). Only public lists, since anyone signed in can read the chat.
 - **Open:** Last.fm import needs a Last.fm API key (free, from Shai's Last.fm account).
 
 ## Group lists

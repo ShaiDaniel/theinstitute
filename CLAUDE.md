@@ -41,7 +41,8 @@ uses the same stack and is a good reference for patterns (sign-in, comments/vote
 4. Home: metrics (hourly GitHub Action → stats/public, stats/members) ← live; feed ← branch `next`.
 5. Chat: mIRC imitation on the Realtime Database (`src/chat/`, `database.rules.json`) ← branch `next`;
    RTDB rules must be published in the console before it works live.
-6. Extras: most divisive, taste match, debates ← branch `next`; bot announcements; Last.fm import (needs a key).
+6. Extras: most divisive, taste match, debates, chat bot (hourly job) ← branch `next`; Last.fm import
+   (needs a key).
 See `PLAN.md` for details and open questions. Phase 1 is infra only: don't invent features.
 
 ## Infrastructure
